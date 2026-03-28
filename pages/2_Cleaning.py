@@ -99,7 +99,7 @@ with st.expander("🔍 1. Missing Values", expanded=True):
 
         st.markdown("---")
         st.markdown("#### Drop Columns with High Missing %")
-        thresh_pct = st.slider("Drop columns where missing % exceeds:", 10, 100, 50, key="mv_thresh_drop")
+        thresh_pct = st.slider("Drop columns where missing % exceeds:", 1, 100, 50, key="mv_thresh_drop")
         high_miss_cols = mv_f[mv_f["Missing %"] > thresh_pct].index.tolist()
         if high_miss_cols:
             st.warning(f"{len(high_miss_cols)} column(s) exceed {thresh_pct}% missing: `{'`, `'.join(high_miss_cols)}`")
@@ -113,6 +113,29 @@ with st.expander("🔍 1. Missing Values", expanded=True):
                 st.rerun()
         else:
             st.info(f"No columns exceed {thresh_pct}% missing.")
+
+        st.markdown("---")
+        st.markdown("#### Drop Rows with Missing Values in Chosen Columns")
+        drop_miss_cols = st.multiselect(
+            "Drop rows that have missing values in any of these columns:",
+            df.columns.tolist(),
+            key="mv_drop_rows_cols"
+        )
+        if drop_miss_cols:
+            preview_count = df[drop_miss_cols].isnull().any(axis=1).sum()
+            st.caption(f"This will remove **{preview_count:,}** row(s) that have at least one missing value in the selected columns.")
+            if st.button("🗑️ Drop Rows with Missing Values", key="mv_drop_rows_apply"):
+                if not drop_miss_cols:
+                    st.error("Please select at least one column.")
+                else:
+                    before_rows = len(df)
+                    st.session_state.history.append(df.copy())
+                    df = df.dropna(subset=drop_miss_cols)
+                    st.session_state.df = df
+                    st.session_state.log.append(f"Dropped rows with missing values in columns: {drop_miss_cols}")
+                    removed = before_rows - len(df)
+                    st.success(f"✅ Dropped {removed:,} row(s). Dataset now has {len(df):,} rows.")
+                    st.rerun()
 
         st.markdown("---")
         st.markdown("#### Bulk Fill — All Missing Columns")
@@ -381,8 +404,14 @@ with st.expander("📐 6. Scaling & Normalization", expanded=False):
         scale_method = st.selectbox("Method", ["Min-Max (0–1)", "Z-score standardization"], key="scale_method")
 
         if scale_cols:
-            st.write("**Before:**")
-            st.dataframe(df[scale_cols].describe().T[["mean","std","min","max"]], use_container_width=True)
+            # Validate — only numeric columns
+            non_numeric = [c for c in scale_cols if c not in num_cols]
+            if non_numeric:
+                st.error(f"❌ The following columns are not numeric and cannot be scaled: `{'`, `'.join(non_numeric)}`")
+                scale_cols = []
+            else:
+                st.write("**Before:**")
+                st.dataframe(df[scale_cols].describe().T[["mean","std","min","max"]], use_container_width=True)
 
         if st.button("✅ Apply Scaling", key="scale_apply") and scale_cols:
             st.session_state.history.append(df.copy())
@@ -475,6 +504,85 @@ with st.expander("🔧 7. Column Operations", expanded=False):
                         st.success(f"✅ Created `{new_bin_col}` with {bin_n} bins from `{bin_col}`."); st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7b. DATE RANGE SPLITTER
+# ═══════════════════════════════════════════════════════════════════════════════
+with st.expander("📅 7b. Date Range Splitter", expanded=False):
+    st.caption("Split a column that contains date ranges (e.g. '2020-01-01 - 2020-12-31') into two separate date columns.")
+
+    text_cols_dr = df.select_dtypes(include=["object"]).columns.tolist()
+    if not text_cols_dr:
+        st.info("No text columns available for date range splitting.")
+    else:
+        dr_col = st.selectbox("Column containing date ranges", text_cols_dr, key="dr_col")
+        sample_vals_dr = df[dr_col].dropna().head(5).tolist()
+        st.caption(f"Sample values: {sample_vals_dr}")
+
+        dr_sep = st.selectbox(
+            "Separator between the two dates",
+            [" - ", " – ", "-", "_", ":", " to ", "/", " / "],
+            key="dr_sep",
+            help="Choose the symbol that divides the start date from the end date in the range."
+        )
+        # Allow custom separator too
+        custom_sep = st.text_input("Or enter a custom separator:", key="dr_custom_sep", placeholder="e.g.  |  or  ~")
+        if custom_sep.strip():
+            dr_sep = custom_sep
+
+        c1, c2 = st.columns(2)
+        dr_col1_name = c1.text_input("New column name — START date", value=f"{dr_col}_start", key="dr_col1_name")
+        dr_col2_name = c2.text_input("New column name — END date",   value=f"{dr_col}_end",   key="dr_col2_name")
+
+        if not dr_col1_name.strip() or not dr_col2_name.strip():
+            st.warning("Please enter names for both new columns.")
+        elif dr_col1_name.strip() == dr_col2_name.strip():
+            st.error("Start and end column names must be different.")
+        else:
+            # Preview
+            try:
+                _preview = df[dr_col].dropna().head(3).apply(
+                    lambda v: v.split(dr_sep, 1) if dr_sep in str(v) else [str(v), ""]
+                )
+                st.caption(f"Preview (first 3 rows): {_preview.tolist()}")
+            except Exception:
+                pass
+
+            if st.button("✅ Split Date Range Column", key="dr_apply"):
+                if dr_col1_name.strip() == dr_col or dr_col2_name.strip() == dr_col:
+                    st.error("New column names must differ from the source column name.")
+                else:
+                    st.session_state.history.append(df.copy())
+                    try:
+                        def _split_range(val):
+                            s = str(val) if pd.notna(val) else ""
+                            parts = s.split(dr_sep, 1)
+                            if len(parts) == 2:
+                                return parts[0].strip(), parts[1].strip()
+                            return s.strip(), ""
+
+                        split_result = df[dr_col].apply(_split_range)
+                        df[dr_col1_name.strip()] = split_result.apply(lambda x: x[0])
+                        df[dr_col2_name.strip()] = split_result.apply(lambda x: x[1])
+
+                        # Replace empty strings with NaN for cleanliness
+                        df[dr_col1_name.strip()] = df[dr_col1_name.strip()].replace("", pd.NA)
+                        df[dr_col2_name.strip()] = df[dr_col2_name.strip()].replace("", pd.NA)
+
+                        n_ok = split_result.apply(lambda x: x[1] != "").sum()
+                        n_fail = len(df) - n_ok
+
+                        st.session_state.df = df
+                        st.session_state.log.append(
+                            f"Split '{dr_col}' by '{dr_sep}' → '{dr_col1_name.strip()}', '{dr_col2_name.strip()}'"
+                        )
+                        msg = f"✅ Created `{dr_col1_name.strip()}` and `{dr_col2_name.strip()}` from `{dr_col}`."
+                        if n_fail > 0:
+                            msg += f" **{n_fail}** row(s) did not contain the separator and were left with an empty end date."
+                        st.success(msg)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error splitting column: {e}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 8. DATA VALIDATION RULES
