@@ -110,7 +110,7 @@ with st.expander("🗂️ Try a Sample Dataset", expanded=False):
         - 1,826 rows · 18 columns
         - Departure dates (2023–2024)
         - 8 airlines, 10 major airports
-        - Origin & destination lat/lon
+        - Origin & destination lat/lon coordinates
         - Prices, delays, passenger counts
         - Missing prices and delay data
         - Duplicates
