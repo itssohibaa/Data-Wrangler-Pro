@@ -10,14 +10,58 @@ import numpy as np
 import re
 
 
-for k, v in [("df", None), ("log", []), ("history", [])]:
+for k, v in [("df", None), ("log", []), ("history", []), ("_tx_preview", None)]:
     if k not in st.session_state:
         st.session_state[k] = v
+
+# ── TRANSFORMATION PREVIEW HELPER ─────────────────────────────────────────────
+def show_tx_preview(label, before_df, after_df, affected_cols=None):
+    st.session_state["_tx_preview"] = {
+        "label": label,
+        "rows_before": len(before_df),
+        "rows_after": len(after_df),
+        "missing_before": int(before_df.isnull().sum().sum()),
+        "missing_after": int(after_df.isnull().sum().sum()),
+        "affected_cols": affected_cols or [],
+    }
+
+def render_tx_preview():
+    p = st.session_state.get("_tx_preview")
+    if not p:
+        return
+    rows_delta  = p["rows_after"] - p["rows_before"]
+    miss_before = p["missing_before"]
+    miss_after  = p["missing_after"]
+    miss_fixed  = max(0, miss_before - miss_after)
+    with st.container(border=True):
+        st.markdown("#### 🔍 Transformation Preview")
+        c1, c2, c3 = st.columns([3, 3, 2])
+        with c1:
+            m1, m2 = st.columns(2)
+            m1.metric("Rows Before", f"{p['rows_before']:,}")
+            m2.metric("Total Missing (Affected)", f"{miss_fixed:,}")
+            m3, m4 = st.columns(2)
+            m3.metric("Rows After", f"{p['rows_after']:,}",
+                      delta=f"{rows_delta:+,}" if rows_delta != 0 else "0",
+                      delta_color="inverse" if rows_delta < 0 else "normal")
+            m4.metric("Remaining Missing", f"{miss_after:,}",
+                      delta=f"{miss_after - miss_before:+,}" if miss_after != miss_before else "0",
+                      delta_color="inverse" if miss_after > miss_before else "normal")
+        with c3:
+            if p["affected_cols"]:
+                cols_html = " ".join(f"<code style='background:#dbeafe;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block'>{c}</code>" for c in p["affected_cols"])
+                st.markdown(f"<div style='background:#eff6ff;border-radius:8px;padding:10px 14px;border:1px solid #bfdbfe'><b>Affected Columns:</b><br>{cols_html}</div>", unsafe_allow_html=True)
+        if st.button("✖ Dismiss", key="_dismiss_preview"):
+            st.session_state["_tx_preview"] = None
+            st.rerun()
+    st.markdown("")
 
 st.title("🧹 Cleaning & Preparation Studio")
 
 if st.session_state.df is None:
     st.warning("Please upload a dataset first."); st.stop()
+
+render_tx_preview()
 
 df = st.session_state.df.copy()
 
@@ -87,6 +131,7 @@ with st.expander("🔍 1. Missing Values", expanded=True):
                 after_miss = int(df[col].isnull().sum())
                 fixed = before_miss - after_miss
                 rows_removed = before_rows - len(df)
+                show_tx_preview(f"Fix missing: {col}", st.session_state.history[-1], df, [col])
                 st.session_state.df = df
                 st.session_state.log.append(f"Missing values in '{col}' handled with {method}")
                 if method == "Drop rows":
@@ -107,6 +152,7 @@ with st.expander("🔍 1. Missing Values", expanded=True):
                 before_cols = df.shape[1]
                 st.session_state.history.append(df.copy())
                 df = df.drop(columns=high_miss_cols)
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Dropped {len(high_miss_cols)} high-missing columns: {high_miss_cols}")
                 st.success(f"✅ Dropped {len(high_miss_cols)} column(s). Dataset now has {df.shape[1]} columns (was {before_cols}).")
@@ -131,6 +177,7 @@ with st.expander("🔍 1. Missing Values", expanded=True):
                     before_rows = len(df)
                     st.session_state.history.append(df.copy())
                     df = df.dropna(subset=drop_miss_cols)
+                    show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                     st.session_state.df = df
                     st.session_state.log.append(f"Dropped rows with missing values in columns: {drop_miss_cols}")
                     removed = before_rows - len(df)
@@ -155,6 +202,7 @@ with st.expander("🔍 1. Missing Values", expanded=True):
                     n_before = int(df[c].isnull().sum())
                     df[c] = df[c].fillna(df[c].mode()[0] if len(df[c].mode()) > 0 else "Unknown")
                     changed.append(f"`{c}` ({n_before} → {int(df[c].isnull().sum())} missing)")
+            show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
             st.session_state.df = df
             st.session_state.log.append(f"Bulk missing fill — numeric: {bulk_numeric}, categorical: {bulk_categ}")
             if changed:
@@ -196,6 +244,7 @@ with st.expander("🔁 2. Duplicate Detection & Treatment", expanded=False):
                 keep = "first" if "first" in action else "last"
                 before = len(df)
                 df = df.drop_duplicates(subset=check_subset, keep=keep)
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Removed duplicates ({keep}) — subset: {check_subset or 'all'}")
                 st.success(f"✅ Removed {before - len(df)} duplicate rows. Dataset now has {len(df):,} rows.")
@@ -225,6 +274,7 @@ with st.expander("🔢 3. Data Types & Parsing", expanded=False):
                 elif tgt_type == "string":   df[type_col] = df[type_col].astype(str)
                 elif tgt_type == "datetime": df[type_col] = pd.to_datetime(df[type_col], errors="coerce")
                 elif tgt_type == "category": df[type_col] = df[type_col].astype("category")
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Converted '{type_col}' from {old_dtype} to {tgt_type}")
                 st.success(f"✅ Column `{type_col}` converted from `{old_dtype}` → `{tgt_type}` successfully.")
@@ -246,6 +296,7 @@ with st.expander("🔢 3. Data Types & Parsing", expanded=False):
                     df[dt_col] = pd.to_datetime(df[dt_col], errors="coerce")
                 after_null = int(df[dt_col].isnull().sum())
                 coerced = after_null - before_null
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Parsed '{dt_col}' as datetime (fmt: '{dt_fmt or 'auto'}')")
                 msg = f"✅ `{dt_col}` parsed as datetime."
@@ -273,6 +324,7 @@ with st.expander("🔢 3. Data Types & Parsing", expanded=False):
                 n_ok   = result.notna().sum()
                 n_fail = result.isna().sum() - int(df[dirty_col].isnull().sum())
                 df[dirty_col] = result
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Cleaned dirty numeric strings in '{dirty_col}'")
                 st.success(f"✅ Cleaned `{dirty_col}`: {n_ok} values converted successfully, {max(0, n_fail)} could not be parsed (set to NaN).")
@@ -304,6 +356,7 @@ with st.expander("🏷️ 4. Categorical Tools", expanded=False):
                 if casing == "lowercase":     df[cat_col] = df[cat_col].str.lower()
                 elif casing == "UPPERCASE":   df[cat_col] = df[cat_col].str.upper()
                 elif casing == "Title Case":  df[cat_col] = df[cat_col].str.title()
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Standardized casing of '{cat_col}': {casing}")
                 st.success(f"✅ Applied **{casing}** to `{cat_col}`."); st.rerun()
@@ -316,6 +369,7 @@ with st.expander("🏷️ 4. Categorical Tools", expanded=False):
             if st.button("✅ Apply Mapping", key="cat_map") and to_val:
                 st.session_state.history.append(df.copy())
                 df[cat_col] = df[cat_col].replace({from_val: to_val})
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Mapped '{from_val}' → '{to_val}' in '{cat_col}'")
                 st.success(f"✅ Replaced `{from_val}` → `{to_val}` in `{cat_col}`."); st.rerun()
@@ -328,6 +382,7 @@ with st.expander("🏷️ 4. Categorical Tools", expanded=False):
             if st.button("✅ Apply Rare Grouping", key="cat_rare"):
                 st.session_state.history.append(df.copy())
                 df[cat_col] = df[cat_col].apply(lambda x: "Other" if x in rare else x)
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Grouped {len(rare)} rare categories in '{cat_col}' into 'Other'")
                 st.success(f"✅ Grouped {len(rare)} rare categories into 'Other' in `{cat_col}`."); st.rerun()
@@ -340,6 +395,7 @@ with st.expander("🏷️ 4. Categorical Tools", expanded=False):
                 dummies = pd.get_dummies(df[cat_col], prefix=cat_col, dtype=int)
                 df = pd.concat([df, dummies], axis=1)
                 if drop_orig: df = df.drop(columns=[cat_col])
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"One-hot encoded '{cat_col}' — {len(dummies.columns)} new columns")
                 st.success(f"✅ Created {len(dummies.columns)} new binary column(s) from `{cat_col}`."); st.rerun()
@@ -381,6 +437,7 @@ with st.expander("📦 5. Outlier Detection & Treatment", expanded=False):
             if action == "Remove outlier rows":
                 before = len(df)
                 df = df[~mask]
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Removed {n_out} outlier rows from '{out_col}'")
                 st.success(f"✅ Removed {n_out} outlier rows from `{out_col}`. Dataset now has {len(df):,} rows."); st.rerun()
@@ -421,6 +478,7 @@ with st.expander("📐 6. Scaling & Normalization", expanded=False):
                     df[c] = (df[c] - mn) / (mx - mn) if mx != mn else 0
                 else:
                     df[c] = (df[c] - df[c].mean()) / df[c].std()
+            show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
             st.session_state.df = df
             st.session_state.log.append(f"Scaled {scale_cols} using {scale_method}")
             st.success(f"✅ Scaled {len(scale_cols)} column(s) using **{scale_method}**.")
@@ -445,6 +503,7 @@ with st.expander("🔧 7. Column Operations", expanded=False):
         if st.button("✅ Rename", key="ren_apply") and new:
             st.session_state.history.append(df.copy())
             df = df.rename(columns={old: new})
+            show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
             st.session_state.df = df
             st.session_state.log.append(f"Renamed '{old}' → '{new}'")
             st.success(f"✅ Renamed `{old}` → `{new}`."); st.rerun()
@@ -454,6 +513,7 @@ with st.expander("🔧 7. Column Operations", expanded=False):
         if st.button("✅ Drop", key="drop_apply") and drop_cols:
             st.session_state.history.append(df.copy())
             df = df.drop(columns=drop_cols)
+            show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
             st.session_state.df = df
             st.session_state.log.append(f"Dropped columns: {drop_cols}")
             st.success(f"✅ Dropped {len(drop_cols)} column(s): `{'`, `'.join(drop_cols)}`."); st.rerun()
@@ -470,6 +530,7 @@ with st.expander("🔧 7. Column Operations", expanded=False):
                 local_vars.update({"log": np.log, "sqrt": np.sqrt, "abs": np.abs,
                                    "exp": np.exp, "mean": np.mean})
                 df[new_col_name] = eval(formula, {"__builtins__": {}}, local_vars)
+                show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Created column '{new_col_name}' = {formula}")
                 st.success(f"✅ Column `{new_col_name}` created successfully from formula: `{formula}`."); st.rerun()
@@ -499,6 +560,7 @@ with st.expander("🔧 7. Column Operations", expanded=False):
                             df[new_bin_col] = pd.cut(df[bin_col], bins=bin_n, labels=labels)
                         else:
                             df[new_bin_col] = pd.qcut(df[bin_col], q=bin_n, labels=labels, duplicates="drop")
+                        show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                         st.session_state.df = df
                         st.session_state.log.append(f"Binned '{bin_col}' into '{new_bin_col}' ({bin_strat})")
                         st.success(f"✅ Created `{new_bin_col}` with {bin_n} bins from `{bin_col}`."); st.rerun()
@@ -572,6 +634,7 @@ with st.expander("📅 7b. Date Range Splitter", expanded=False):
                         n_ok = split_result.apply(lambda x: x[1] != "").sum()
                         n_fail = len(df) - n_ok
 
+                        show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                         st.session_state.df = df
                         st.session_state.log.append(
                             f"Split '{dr_col}' by '{dr_sep}' → '{dr_col1_name.strip()}', '{dr_col2_name.strip()}'"
