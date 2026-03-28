@@ -112,7 +112,7 @@ with st.expander("🗂️ Try a Sample Dataset", expanded=False):
         - 8 airlines, 10 major airports
         - Origin & destination lat/lon coordinates
         - Prices, delays, passenger counts
-        - Missing prices and delay
+        - Missing prices and delay data
         - Duplicates
         """)
         if st.button("Load", use_container_width=True, key="sample_flights"):
