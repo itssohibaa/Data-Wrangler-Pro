@@ -179,17 +179,19 @@ with r2c2:
                              aspect="auto",          # auto so it fills width, not squares only
                              labels=dict(color="r"))
             fig.update_layout(
-                **LAYOUT_BASE,
-                title=dict(text="Correlation Matrix", x=0.02, xanchor="left"),
+                font_family="Inter, sans-serif",
+                paper_bgcolor="rgba(0,0,0,0)",
+                title=dict(text="Correlation Matrix", x=0.02, xanchor="left",
+                           font=dict(size=15, color="#0f172a")),
                 xaxis_title="", yaxis_title="",
                 height=hm_h,
                 margin=dict(t=46, b=10, l=10, r=10),
                 coloraxis_colorbar=dict(
-                    len=0.75,          # shorter bar
-                    thickness=10,      # thinner bar
+                    len=0.75,
+                    thickness=10,
                     title=dict(text="r", side="right"),
                     tickfont=dict(size=10),
-                    x=1.01,            # push it flush to the right edge
+                    x=1.01,
                 ),
             )
             fig.update_xaxes(tickangle=-40, tickfont=dict(size=10), side="bottom")
