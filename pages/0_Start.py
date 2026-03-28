@@ -225,6 +225,6 @@ for col, (bg, title_c, sub_c, icon, title, sub, page) in zip(cols, cards):
         st.page_link(f"pages/{page}.py", label=f"Open {title}", use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
-st.info("👈 Use the sidebar to navigate, or click any section card above. Start with **Upload & Profile**, then clean, and visualize.")
+st.info("👈 Use the sidebar to navigate, or click any section card above. Start with **Upload & Profile**, then clean and visualize your data!")
 st.markdown("---")
 st.caption("DataWrangler Pro · Coursework Project — Data Wrangling & Visualization · IDs: 00017592 & 00018555")
