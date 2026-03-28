@@ -168,28 +168,32 @@ with r2c2:
     with st.container(border=True):
         st.markdown("**Correlation Heatmap**")
         if len(numeric_cols) >= 2:
-            corr = df[numeric_cols].corr()
-            n    = len(numeric_cols)
-            hm_h = max(CHART_HEIGHT, n * 38 + 80)
-            fig = px.imshow(
-            corr,
-            color_continuous_scale="RdBu_r",
-            text_auto=".2f",
-            labels=dict(color="r")
-            )
-
+            # Let user pick a subset so the heatmap stays readable in the dashboard grid
+            max_hm = min(12, len(numeric_cols))
+            hm_cols = numeric_cols[:max_hm]
+            corr = df[hm_cols].corr()
+            n    = len(hm_cols)
+            # Fixed height that fills the card without overflowing; width comes from use_container_width
+            hm_h = max(CHART_HEIGHT, n * 42 + 60)
+            fig  = px.imshow(corr, color_continuous_scale="RdBu_r", text_auto=".2f",
+                             aspect="auto",          # auto so it fills width, not squares only
+                             labels=dict(color="r"))
             fig.update_layout(
-            **LAYOUT_BASE,
-            title=dict(text="Correlation Matrix", x=0.02, xanchor="left"),
-            xaxis_title="",
-            yaxis_title="",
-            height=hm_h,
-            width=700,
-            coloraxis_colorbar=dict(len=0.4, thickness=10, title="r"),
+                **LAYOUT_BASE,
+                title=dict(text="Correlation Matrix", x=0.02, xanchor="left"),
+                xaxis_title="", yaxis_title="",
+                height=hm_h,
+                margin=dict(t=46, b=10, l=10, r=10),
+                coloraxis_colorbar=dict(
+                    len=0.75,          # shorter bar
+                    thickness=10,      # thinner bar
+                    title=dict(text="r", side="right"),
+                    tickfont=dict(size=10),
+                    x=1.01,            # push it flush to the right edge
+                ),
             )
-
-            fig.update_xaxes(tickangle=-35, tickfont=dict(size=11))
-            fig.update_yaxes(tickfont=dict(size=11))
+            fig.update_xaxes(tickangle=-40, tickfont=dict(size=10), side="bottom")
+            fig.update_yaxes(tickfont=dict(size=10))
             st.plotly_chart(fig, use_container_width=True, key="g4")
             chart_download(fig, "g4")
 
@@ -500,10 +504,17 @@ elif chart_type == "Pie / Donut Chart":
 
     # Matplotlib version
     fig_mpl, ax = plt.subplots(figsize=(7, 7))
-    wedge_props = {"width": 0.5} if donut else {}
-    ax.pie(top["count"], labels=top[cat].astype(str), autopct="%1.1f%%",
-           colors=plt.cm.tab10.colors[:len(top)], **wedge_props,
-           startangle=140, pctdistance=0.85)
+    mpl_colors = [plt.cm.tab10(i / 10) for i in range(min(len(top), 10))]
+    wedge_kw = {"width": 0.5} if donut else {}
+    ax.pie(
+        top["count"].values,
+        labels=top[cat].astype(str).tolist(),
+        autopct="%1.1f%%",
+        colors=mpl_colors,
+        wedgeprops=wedge_kw,
+        startangle=140,
+        pctdistance=0.75 if donut else 0.85,
+    )
     ax.set_title(f"Distribution of {cat}", fontsize=14, fontweight="bold", pad=12)
     fig_mpl.patch.set_facecolor("white")
     plt.tight_layout()
