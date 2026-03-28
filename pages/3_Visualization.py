@@ -170,9 +170,7 @@ with r2c2:
         if len(numeric_cols) >= 2:
             corr = df[numeric_cols].corr()
             n    = len(numeric_cols)
-            # Ensure matrix is large enough: min 40px per cell, plus room for colorbar
-            cell_size = max(40, min(70, 400 // max(n, 1)))
-            hm_h = max(CHART_HEIGHT, n * cell_size + 120)
+            hm_h = max(CHART_HEIGHT, n * 38 + 80)
             fig  = px.imshow(corr, color_continuous_scale="RdBu_r", text_auto=".2f",
                              aspect="equal", labels=dict(color="r"))
             fig.update_layout(
@@ -180,15 +178,7 @@ with r2c2:
                 title=dict(text="Correlation Matrix", x=0.02, xanchor="left"),
                 xaxis_title="", yaxis_title="",
                 height=hm_h,
-                # colorbar length relative to plot area, not the whole figure
-                coloraxis_colorbar=dict(
-                    len=0.75,
-                    thickness=14,
-                    title="r",
-                    yanchor="middle",
-                    y=0.5,
-                ),
-                margin=dict(t=50, b=60, l=60, r=100),
+                coloraxis_colorbar=dict(len=0.6, thickness=12, title="r"),
             )
             fig.update_xaxes(tickangle=-35, tickfont=dict(size=11))
             fig.update_yaxes(tickfont=dict(size=11))
@@ -252,26 +242,11 @@ fig_mpl = None  # matplotlib fallback
 if chart_type == "Histogram":
     if not numeric_cols: st.warning("No numeric columns."); st.stop()
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    col    = c1.selectbox("X-axis (column)", numeric_cols, key="h_col")
-    nbins  = c2.slider("Bins", 5, 100, 20, key="h_bins")
-    y_mode = c3.selectbox("Y-axis metric", ["Frequency (count)", "Probability (%)", "Density"], key="h_ymode")
-    colby  = c4.selectbox("Color/group by", ["(none)"] + categorical_cols, key="h_col2")
-    ca     = colby if colby != "(none)" else None
-
-    # Map Y axis mode to plotly histnorm
-    _histnorm_map = {
-        "Frequency (count)": None,
-        "Probability (%)":   "percent",
-        "Density":           "density",
-    }
-    _ylabel_map = {
-        "Frequency (count)": "Frequency",
-        "Probability (%)":   "Probability (%)",
-        "Density":           "Density",
-    }
-    histnorm = _histnorm_map[y_mode]
-    ylabel   = _ylabel_map[y_mode]
+    c1, c2, c3, c4 = st.columns(4)
+    col   = c1.selectbox("X-axis (column)", numeric_cols, key="h_col")
+    nbins = c2.slider("Bins", 5, 100, 20, key="h_bins")
+    colby = c3.selectbox("Color/group by", ["(none)"] + categorical_cols, key="h_col2")
+    ca    = colby if colby != "(none)" else None
 
     # Filters
     with st.expander("🔎 Chart Filters", expanded=False):
@@ -283,27 +258,20 @@ if chart_type == "Histogram":
                 fsel  = f2.multiselect("Keep", fvals, default=fvals, key="h_fv")
                 if fsel: df = df[df[fc].astype(str).isin(fsel)]
 
-    fig = px.histogram(df, x=col, nbins=nbins, color=ca, histnorm=histnorm,
+    fig = px.histogram(df, x=col, nbins=nbins, color=ca,
                        color_discrete_sequence=THEME_COLORS,
-                       labels={col: col.replace("_"," "), "count": ylabel})
-    fig = style_fig(fig, f"Distribution of {col} ({y_mode})", col.replace("_"," "), ylabel)
+                       labels={col: col.replace("_"," "), "count": "Frequency"})
+    fig = style_fig(fig, f"Distribution of {col}", col.replace("_"," "), "Frequency")
 
     # Matplotlib version
     fig_mpl, ax = plt.subplots(figsize=(10, 4))
-    _mpl_density = (y_mode == "Density")
-    _mpl_pct     = (y_mode == "Probability (%)")
     if ca:
         for grp, gdf in df.groupby(ca):
-            ax.hist(gdf[col].dropna(), bins=nbins, alpha=0.7, label=str(grp),
-                    edgecolor="white", density=_mpl_density)
+            ax.hist(gdf[col].dropna(), bins=nbins, alpha=0.7, label=str(grp), edgecolor="white")
         ax.legend(title=ca)
     else:
-        ax.hist(df[col].dropna(), bins=nbins, color="#4f46e5", edgecolor="white",
-                alpha=0.85, density=_mpl_density)
-    if _mpl_pct:
-        # convert to %
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y*100:.1f}%"))
-    ax.set_xlabel(col.replace("_"," ")); ax.set_ylabel(ylabel)
+        ax.hist(df[col].dropna(), bins=nbins, color="#4f46e5", edgecolor="white", alpha=0.85)
+    ax.set_xlabel(col.replace("_"," ")); ax.set_ylabel("Frequency")
     ax.set_title(f"Distribution of {col}", fontsize=14, fontweight="bold", pad=12)
     ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
     ax.set_facecolor("#f8fafc"); fig_mpl.patch.set_facecolor("white")
@@ -465,8 +433,7 @@ elif chart_type == "Correlation Heatmap":
     if len(sel_cols) >= 2:
         corr = df[sel_cols].corr()
         n_hm = len(sel_cols)
-        cell_size_hm = max(40, min(70, 500 // max(n_hm, 1)))
-        hm_h_custom = max(500, n_hm * cell_size_hm + 120)
+        hm_h_custom = max(500, n_hm * 42 + 80)
         fig  = px.imshow(corr, color_continuous_scale="RdBu_r", text_auto=".2f",
                          aspect="equal", labels=dict(color="r"))
         fig.update_layout(
@@ -474,14 +441,7 @@ elif chart_type == "Correlation Heatmap":
             title=dict(text="Correlation Matrix", x=0.02, xanchor="left"),
             xaxis_title="", yaxis_title="",
             height=hm_h_custom,
-            coloraxis_colorbar=dict(
-                len=0.75,
-                thickness=14,
-                title="r",
-                yanchor="middle",
-                y=0.5,
-            ),
-            margin=dict(t=50, b=60, l=60, r=100),
+            coloraxis_colorbar=dict(len=0.6, thickness=12, title="r"),
         )
         fig.update_xaxes(tickangle=-35, tickfont=dict(size=11))
         fig.update_yaxes(tickfont=dict(size=11))
