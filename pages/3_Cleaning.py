@@ -132,7 +132,7 @@ with st.expander("🔍 1. Missing Values", expanded=True):
             before_mv = _mv_stats(df, fix_cols)
 
             last_mv = st.session_state.get("_last_mv", {})
-            if last_mv.get("cols") == fix_cols and last_mv.get("method") == method:
+            if sorted(last_mv.get("cols", [])) == sorted(fix_cols) and last_mv.get("method") == method:
                 mc1, mc2 = st.columns(2)
                 with mc1:
                     st.write("**Before:**")
