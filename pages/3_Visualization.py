@@ -9,6 +9,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import io
 
@@ -21,7 +23,7 @@ st.title("📊 Visualization Studio")
 if st.session_state.df is None:
     st.warning("Upload data first on the Upload page."); st.stop()
 
-# ── DEDUPLICATE COLUMNS (fixes line chart + all charts) ───────────────────────
+# ── DEDUPLICATE COLUMNS ────────────────────────────────────────────────────────
 raw = st.session_state.df.copy()
 seen = {}
 new_cols = []
@@ -51,7 +53,7 @@ LAYOUT_BASE = dict(
     legend=dict(bgcolor="rgba(255,255,255,0.8)", bordercolor="#e2e8f0", borderwidth=1)
 )
 
-CHART_HEIGHT = 420  # uniform height for all dashboard charts
+CHART_HEIGHT = 420
 
 def style_fig(fig, title="", xlab="", ylab=""):
     fig.update_layout(
@@ -66,21 +68,12 @@ def style_fig(fig, title="", xlab="", ylab=""):
     return fig
 
 def chart_download(fig, key):
-    # Apply white background for clean export
     export_fig = go.Figure(fig)
     export_fig.update_layout(
         paper_bgcolor="white",
         plot_bgcolor="#f8fafc",
         font_color="#0f172a",
         title_font_color="#0f172a",
-    )
-    html_str = export_fig.to_html(
-        include_plotlyjs="cdn",
-        full_html=True,
-        config={"toImageButtonOptions": {
-            "format": "png", "filename": f"chart_{key}",
-            "height": 700, "width": 1400, "scale": 2
-        }}
     )
     st.caption("💡 Hover over the chart and click the **📷 camera icon** (top-right) to save as PNG.")
 
@@ -156,7 +149,6 @@ with r2c1:
             g3y   = st.selectbox("Y-axis", numeric_cols, index=min(1, len(numeric_cols)-1), key="g3y")
             g3col = st.selectbox("Color by", ["(none)"] + categorical_cols, key="g3col")
             ca    = g3col if g3col != "(none)" else None
-            # Compute per-point opacity: darker where data overlaps
             _scatter_df = df[[g3x, g3y] + ([g3col] if ca else [])].dropna().copy()
             _scatter_df["_density"] = (
                 _scatter_df.groupby([
@@ -164,8 +156,6 @@ with r2c1:
                     pd.cut(_scatter_df[g3y], bins=40, labels=False)
                 ])[g3x].transform("count")
             )
-            _max_d = _scatter_df["_density"].max() if _scatter_df["_density"].max() > 0 else 1
-            _scatter_df["_opacity"] = (0.25 + 0.7 * (_scatter_df["_density"] / _max_d)).clip(0.25, 0.95)
             fig   = px.scatter(_scatter_df, x=g3x, y=g3y, color=ca,
                                color_discrete_sequence=THEME_COLORS,
                                opacity=0.65,
@@ -236,7 +226,7 @@ with r3c2:
 st.markdown("---")
 
 # ════════════════════════════════════════════════════════════════════════════════
-# CUSTOM CHART BUILDER
+# CUSTOM CHART BUILDER (enhanced)
 # ════════════════════════════════════════════════════════════════════════════════
 st.subheader("🔧 Custom Chart Builder")
 
@@ -245,43 +235,112 @@ CHART_TYPES = ["Histogram", "Bar Chart", "Scatter Plot", "Line Chart",
 
 chart_type = st.selectbox("Chart type", CHART_TYPES, key="ctype")
 fig = None
+fig_mpl = None  # matplotlib fallback
+
+# ── Per-chart type options with X + Y axis selection ──────────────────────────
 
 if chart_type == "Histogram":
     if not numeric_cols: st.warning("No numeric columns."); st.stop()
-    c1, c2, c3 = st.columns(3)
-    col   = c1.selectbox("Column (X-axis)", numeric_cols, key="h_col")
+
+    c1, c2, c3, c4 = st.columns(4)
+    col   = c1.selectbox("X-axis (column)", numeric_cols, key="h_col")
     nbins = c2.slider("Bins", 5, 100, 20, key="h_bins")
-    colby = c3.selectbox("Color by", ["(none)"] + categorical_cols, key="h_col2")
+    colby = c3.selectbox("Color/group by", ["(none)"] + categorical_cols, key="h_col2")
     ca    = colby if colby != "(none)" else None
-    fig   = px.histogram(df, x=col, nbins=nbins, color=ca,
-                         color_discrete_sequence=THEME_COLORS,
-                         labels={col: col.replace("_"," "), "count": "Frequency"})
+
+    # Filters
+    with st.expander("🔎 Chart Filters", expanded=False):
+        f1, f2 = st.columns(2)
+        if categorical_cols:
+            fc = f1.selectbox("Filter category", ["(none)"] + categorical_cols, key="h_fc")
+            if fc != "(none)":
+                fvals = df[fc].astype(str).dropna().unique().tolist()
+                fsel  = f2.multiselect("Keep", fvals, default=fvals, key="h_fv")
+                if fsel: df = df[df[fc].astype(str).isin(fsel)]
+
+    fig = px.histogram(df, x=col, nbins=nbins, color=ca,
+                       color_discrete_sequence=THEME_COLORS,
+                       labels={col: col.replace("_"," "), "count": "Frequency"})
     fig = style_fig(fig, f"Distribution of {col}", col.replace("_"," "), "Frequency")
+
+    # Matplotlib version
+    fig_mpl, ax = plt.subplots(figsize=(10, 4))
+    if ca:
+        for grp, gdf in df.groupby(ca):
+            ax.hist(gdf[col].dropna(), bins=nbins, alpha=0.7, label=str(grp), edgecolor="white")
+        ax.legend(title=ca)
+    else:
+        ax.hist(df[col].dropna(), bins=nbins, color="#4f46e5", edgecolor="white", alpha=0.85)
+    ax.set_xlabel(col.replace("_"," ")); ax.set_ylabel("Frequency")
+    ax.set_title(f"Distribution of {col}", fontsize=14, fontweight="bold", pad=12)
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    ax.set_facecolor("#f8fafc"); fig_mpl.patch.set_facecolor("white")
 
 elif chart_type == "Bar Chart":
     if not (categorical_cols and numeric_cols):
         st.warning("Need categorical + numeric columns."); st.stop()
-    c1, c2, c3, c4 = st.columns(4)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
     cat  = c1.selectbox("X-axis (category)", categorical_cols, key="b_cat")
     num  = c2.selectbox("Y-axis (value)", numeric_cols, key="b_num")
     agg  = c3.selectbox("Aggregation", ["mean","sum","count","median"], key="b_agg")
     topn = c4.slider("Top N categories", 3, 50, 15, key="b_topn")
+    colby = c5.selectbox("Color/group by", ["(none)", cat] + [c for c in categorical_cols if c != cat], key="b_colby")
+    ca    = colby if colby != "(none)" else None
+
+    # Filters
+    with st.expander("🔎 Chart Filters", expanded=False):
+        f1, f2 = st.columns(2)
+        fcat = f1.selectbox("Filter category", ["(none)"] + categorical_cols, key="b_fc")
+        if fcat != "(none)":
+            fvals = df[fcat].astype(str).dropna().unique().tolist()
+            fsel  = f2.multiselect("Keep", fvals, default=fvals, key="b_fv")
+            if fsel: df = df[df[fcat].astype(str).isin(fsel)]
+        if numeric_cols:
+            fn = f1.selectbox("Filter numeric range", ["(none)"] + numeric_cols, key="b_fn")
+            if fn != "(none)":
+                mn, mx = float(df[fn].min()), float(df[fn].max())
+                rng = f2.slider("Range", mn, mx, (mn, mx), key="b_frng")
+                df = df[df[fn].between(rng[0], rng[1])]
+
     gd   = df.groupby(cat)[num].agg(agg).reset_index().nlargest(topn, num)
-    fig  = px.bar(gd, x=cat, y=num, color=cat, color_discrete_sequence=THEME_COLORS,
+    fig  = px.bar(gd, x=cat, y=num, color=ca if ca else cat,
+                  color_discrete_sequence=THEME_COLORS,
                   labels={cat: cat.replace("_"," "),
                           num: f"{agg} of {num.replace('_',' ')}"})
     fig = style_fig(fig, f"{agg.capitalize()} of {num} by {cat} (Top {topn})",
                     cat.replace("_"," "), f"{agg.capitalize()} of {num.replace('_',' ')}")
-    fig.update_layout(showlegend=False)
+    if not ca: fig.update_layout(showlegend=False)
+
+    # Matplotlib version
+    fig_mpl, ax = plt.subplots(figsize=(10, 4))
+    colors = plt.cm.tab10.colors[:len(gd)]
+    ax.bar(gd[cat].astype(str), gd[num], color=colors, edgecolor="white", alpha=0.9)
+    ax.set_xlabel(cat.replace("_"," ")); ax.set_ylabel(f"{agg.capitalize()} of {num}")
+    ax.set_title(f"{agg.capitalize()} of {num} by {cat} (Top {topn})", fontsize=14, fontweight="bold", pad=12)
+    plt.xticks(rotation=45, ha="right")
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    ax.set_facecolor("#f8fafc"); fig_mpl.patch.set_facecolor("white")
+    plt.tight_layout()
 
 elif chart_type == "Scatter Plot":
     if len(numeric_cols) < 2: st.warning("Need ≥2 numeric columns."); st.stop()
     c1, c2, c3, c4 = st.columns(4)
     xc    = c1.selectbox("X-axis", numeric_cols, key="sc_x")
     yc    = c2.selectbox("Y-axis", numeric_cols, index=min(1,len(numeric_cols)-1), key="sc_y")
-    colby = c3.selectbox("Color by", ["(none)"] + categorical_cols, key="sc_col")
+    colby = c3.selectbox("Color/group by", ["(none)"] + categorical_cols, key="sc_col")
     trend = c4.checkbox("Trendline (OLS)", key="sc_trend")
     ca    = colby if colby != "(none)" else None
+
+    # Filters
+    with st.expander("🔎 Chart Filters", expanded=False):
+        f1, f2 = st.columns(2)
+        fcat = f1.selectbox("Filter category", ["(none)"] + categorical_cols, key="sc_fc")
+        if fcat != "(none)":
+            fvals = df[fcat].astype(str).dropna().unique().tolist()
+            fsel  = f2.multiselect("Keep", fvals, default=fvals, key="sc_fv")
+            if fsel: df = df[df[fcat].astype(str).isin(fsel)]
+
     _sc_df = df[[xc, yc] + ([colby] if ca else [])].dropna().copy()
     _sc_df["_density"] = (
         _sc_df.groupby([
@@ -295,12 +354,25 @@ elif chart_type == "Scatter Plot":
                        labels={xc: xc.replace("_"," "), yc: yc.replace("_"," ")})
     fig = style_fig(fig, f"Relationship: {yc} vs {xc}", xc.replace("_"," "), yc.replace("_"," "))
 
+    # Matplotlib version
+    fig_mpl, ax = plt.subplots(figsize=(10, 4))
+    if ca:
+        for grp, gdf in _sc_df.groupby(ca):
+            ax.scatter(gdf[xc], gdf[yc], alpha=0.6, s=20, label=str(grp))
+        ax.legend(title=ca)
+    else:
+        ax.scatter(_sc_df[xc], _sc_df[yc], alpha=0.6, color="#4f46e5", s=20)
+    ax.set_xlabel(xc.replace("_"," ")); ax.set_ylabel(yc.replace("_"," "))
+    ax.set_title(f"{yc} vs {xc}", fontsize=14, fontweight="bold", pad=12)
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    ax.set_facecolor("#f8fafc"); fig_mpl.patch.set_facecolor("white")
+
 elif chart_type == "Line Chart":
     if not numeric_cols: st.warning("No numeric columns."); st.stop()
     c1, c2, c3 = st.columns(3)
     xc    = c1.selectbox("X-axis", all_cols, key="ln_x")
     yc    = c2.selectbox("Y-axis", numeric_cols, key="ln_y")
-    colby = c3.selectbox("Color by", ["(none)"] + categorical_cols, key="ln_col")
+    colby = c3.selectbox("Color/group by", ["(none)"] + categorical_cols, key="ln_col")
     ca    = colby if colby != "(none)" else None
     try:
         cols_needed = [xc, yc] + ([colby] if ca else [])
@@ -308,6 +380,19 @@ elif chart_type == "Line Chart":
         fig = px.line(pld, x=xc, y=yc, color=ca, color_discrete_sequence=THEME_COLORS,
                       labels={xc: xc.replace("_"," "), yc: yc.replace("_"," ")}, markers=True)
         fig = style_fig(fig, f"{yc} over {xc}", xc.replace("_"," "), yc.replace("_"," "))
+        # Matplotlib version
+        fig_mpl, ax = plt.subplots(figsize=(10, 4))
+        if ca:
+            for grp, gdf in pld.groupby(ca):
+                ax.plot(gdf[xc], gdf[yc], marker="o", ms=3, label=str(grp))
+            ax.legend(title=ca)
+        else:
+            ax.plot(pld[xc], pld[yc], color="#4f46e5", marker="o", ms=3)
+        ax.set_xlabel(xc.replace("_"," ")); ax.set_ylabel(yc.replace("_"," "))
+        ax.set_title(f"{yc} over {xc}", fontsize=14, fontweight="bold", pad=12)
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+        ax.set_facecolor("#f8fafc"); fig_mpl.patch.set_facecolor("white")
+        plt.xticks(rotation=30, ha="right"); plt.tight_layout()
     except Exception as e:
         st.warning(f"Could not render line chart: {e}")
 
@@ -323,6 +408,23 @@ elif chart_type == "Box Plot":
     fig = style_fig(fig, f"Box Plot of {yc}" + (f" grouped by {xc}" if xa else ""),
                     xtitle, yc.replace("_"," "))
     fig.update_layout(showlegend=False)
+
+    # Matplotlib version
+    fig_mpl, ax = plt.subplots(figsize=(10, 4))
+    if xa:
+        groups = [gdf[yc].dropna().values for _, gdf in df.groupby(xa)]
+        labels = [str(g) for g in df[xa].dropna().unique()]
+        ax.boxplot(groups, labels=labels, patch_artist=True,
+                   boxprops=dict(facecolor="#c7d2fe"), medianprops=dict(color="#4f46e5", linewidth=2))
+        plt.xticks(rotation=30, ha="right")
+    else:
+        ax.boxplot(df[yc].dropna().values, patch_artist=True,
+                   boxprops=dict(facecolor="#c7d2fe"), medianprops=dict(color="#4f46e5", linewidth=2))
+    ax.set_ylabel(yc.replace("_"," "))
+    ax.set_title(f"Box Plot of {yc}", fontsize=14, fontweight="bold", pad=12)
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    ax.set_facecolor("#f8fafc"); fig_mpl.patch.set_facecolor("white")
+    plt.tight_layout()
 
 elif chart_type == "Correlation Heatmap":
     if len(numeric_cols) < 2: st.warning("Need ≥2 numeric columns."); st.stop()
@@ -388,16 +490,37 @@ elif chart_type == "Pie / Donut Chart":
                       paper_bgcolor="rgba(0,0,0,0)",
                       legend_title=cat.replace("_"," "))
 
+    # Matplotlib version
+    fig_mpl, ax = plt.subplots(figsize=(7, 7))
+    wedge_props = {"width": 0.5} if donut else {}
+    ax.pie(top["count"], labels=top[cat].astype(str), autopct="%1.1f%%",
+           colors=plt.cm.tab10.colors[:len(top)], **wedge_props,
+           startangle=140, pctdistance=0.85)
+    ax.set_title(f"Distribution of {cat}", fontsize=14, fontweight="bold", pad=12)
+    fig_mpl.patch.set_facecolor("white")
+    plt.tight_layout()
+
+# ── RENDER PLOTLY + MATPLOTLIB SIDE BY SIDE ───────────────────────────────────
 if fig is not None:
     st.plotly_chart(fig, use_container_width=True, key="custom_chart")
     chart_download(fig, "custom")
 
+# Matplotlib panel below (always shown when available)
+if fig_mpl is not None:
+    with st.expander("📉 Matplotlib Version (static, downloadable)", expanded=False):
+        st.pyplot(fig_mpl)
+        buf = io.BytesIO()
+        fig_mpl.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        st.download_button("⬇️ Download PNG", buf.getvalue(),
+                           f"chart_{chart_type.lower().replace(' ','_')}.png",
+                           mime="image/png", key="custom_mpl_dl")
+        plt.close(fig_mpl)
+
 st.markdown("---")
 
 # ════════════════════════════════════════════════════════════════════════════════
-# MAP VISUALIZATION (auto-detected or manual)
+# MAP VISUALIZATION
 # ════════════════════════════════════════════════════════════════════════════════
-# Detect likely lat/lon columns
 _lat_candidates = [c for c in df.columns if any(k in c.lower() for k in ["lat", "latitude"])]
 _lon_candidates = [c for c in df.columns if any(k in c.lower() for k in ["lon", "lng", "longitude"])]
 _has_coords = len(_lat_candidates) > 0 and len(_lon_candidates) > 0
@@ -474,7 +597,7 @@ if numeric_cols:
 
 st.markdown("---")
 
-# ── MATPLOTLIB CHART ──────────────────────────────────────────────────────────
+# ── STANDALONE MATPLOTLIB CHART ───────────────────────────────────────────────
 st.subheader("📉 Matplotlib Chart")
 if numeric_cols:
     mpl_col  = st.selectbox("Column", numeric_cols, key="mpl_col")
@@ -482,7 +605,7 @@ if numeric_cols:
                         horizontal=True, key="mpl_type")
     clean_data = df[mpl_col].dropna()
     if not clean_data.empty:
-        fig_mpl, ax = plt.subplots(figsize=(10, 4))
+        fig_mpl2, ax = plt.subplots(figsize=(10, 4))
         if mpl_type == "Histogram":
             ax.hist(clean_data, bins=30, color="#4f46e5", edgecolor="white", alpha=0.85)
             ax.set_ylabel("Frequency")
@@ -494,10 +617,10 @@ if numeric_cols:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.set_facecolor("#f8fafc")
-        fig_mpl.patch.set_facecolor("white")
-        st.pyplot(fig_mpl)
+        fig_mpl2.patch.set_facecolor("white")
+        st.pyplot(fig_mpl2)
         buf = io.BytesIO()
-        fig_mpl.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        fig_mpl2.savefig(buf, format="png", dpi=150, bbox_inches="tight")
         st.download_button("⬇️ Download PNG", buf.getvalue(),
                            f"matplotlib_{mpl_col}.png", mime="image/png", key="mpl_dl")
-        plt.close(fig_mpl)
+        plt.close(fig_mpl2)
