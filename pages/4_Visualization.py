@@ -397,6 +397,7 @@ elif chart_type == "Line Chart":
         fig = px.line(pld, x=xc, y=yc, color=ca, color_discrete_sequence=THEME_COLORS,
                       labels={xc: xc.replace("_"," "), yc: yc.replace("_"," ")}, markers=True)
         fig = style_fig(fig, f"{yc} over {xc}", xc.replace("_"," "), yc.replace("_"," "))
+        fig.update_xaxes(tickangle=-40, tickfont=dict(size=11))
         # Matplotlib version
         fig_mpl, ax = plt.subplots(figsize=(10, 4))
         if ca:
@@ -409,7 +410,7 @@ elif chart_type == "Line Chart":
         ax.set_title(f"{yc} over {xc}", fontsize=14, fontweight="bold", pad=12)
         ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
         ax.set_facecolor("#f8fafc"); fig_mpl.patch.set_facecolor("white")
-        plt.xticks(rotation=30, ha="right"); plt.tight_layout()
+        plt.xticks(rotation=40, ha="right"); plt.tight_layout()
     except Exception as e:
         st.warning(f"Could not render line chart: {e}")
 
