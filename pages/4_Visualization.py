@@ -105,9 +105,12 @@ st.markdown("---")
 # ════════════════════════════════════════════════════════════════════════════════
 st.subheader("📈 Analytical Dashboard")
 
-r1c1, r1c2 = st.columns(2, gap="medium")
-r2c1, r2c2 = st.columns(2, gap="medium")
-r3c1, r3c2 = st.columns(2, gap="medium")
+r1c1 = st.container()
+r1c2 = st.container()
+r2c1 = st.container()
+r2c2 = st.container()
+r3c1 = st.container()
+r3c2 = st.container()
 
 with r1c1:
     with st.container(border=True):
@@ -232,6 +235,7 @@ with r3c2:
                               color_discrete_sequence=THEME_COLORS,
                               labels={g6x: g6x.replace("_"," "), g6y: g6y.replace("_"," ")})
                 fig = style_fig(fig, f"{g6y} over {g6x}", g6x.replace("_"," "), g6y.replace("_"," "))
+                fig.update_xaxes(tickangle=-40, tickfont=dict(size=11))
                 st.plotly_chart(fig, use_container_width=True, key="g6")
                 chart_download(fig, "g6")
             except Exception as e:
