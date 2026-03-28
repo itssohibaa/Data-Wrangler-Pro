@@ -67,12 +67,13 @@ with st.expander("🗂️ Try a Sample Dataset", expanded=False):
     with s1:
         st.markdown("""
         **🛒 E-Commerce Orders**
-        - 1,500 rows · 16 columns
+        - 1,520 rows · 16 columns
         - Order dates (2022–2024)
         - Countries, categories, payment methods
         - Customer lat/lon coordinates
         - Revenue, discounts, review scores
         - Some missing values in rating & shipping
+        - Duplicates
         """)
         if st.button("Load E-Commerce Orders", use_container_width=True, key="sample_ecom"):
             import os
@@ -86,12 +87,13 @@ with st.expander("🗂️ Try a Sample Dataset", expanded=False):
     with s2:
         st.markdown("""
         **🌫️ Air Quality Monitoring**
-        - 2,000 rows · 15 columns
+        - 2,100 rows · 15 columns
         - Timestamps every 6 hours (2020)
         - 10 global cities with coordinates
         - PM2.5, PM10, NO₂, O₃, AQI readings
         - Temperature, humidity, wind speed
-        - Missing sensor readings (realistic)
+        - Missing sensor readings
+        - Duplicates
         """)
         if st.button("Load Air Quality Data", use_container_width=True, key="sample_air"):
             import os
@@ -105,12 +107,13 @@ with st.expander("🗂️ Try a Sample Dataset", expanded=False):
     with s3:
         st.markdown("""
         **✈️ Global Flights**
-        - 1,800 rows · 18 columns
+        - 1,826 rows · 18 columns
         - Departure dates (2023–2024)
         - 8 airlines, 10 major airports
         - Origin & destination lat/lon
         - Prices, delays, passenger counts
         - Missing prices and delay data
+        - Duplicates
         """)
         if st.button("Load Global Flights", use_container_width=True, key="sample_flights"):
             import os
