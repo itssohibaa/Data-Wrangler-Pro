@@ -161,7 +161,6 @@ if not st.session_state.intro_done:
         <span class="intro-step">📂 Upload</span>
         <span class="intro-step">🧹 Clean</span>
         <span class="intro-step">📊 Visualize</span>
-        <span class="intro-step">📋 Dashboard</span>
         <span class="intro-step">📤 Export</span>
       </div>
     </div>
@@ -201,7 +200,6 @@ if st.session_state.dark_mode:
         ("#14532d", "#86efac", "#4ade80", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale",   "2_Cleaning"),
         ("#3b0764", "#d8b4fe", "#c084fc", "📊", "Visualize",         "8 chart types · 3D · Download",  "3_Visualization"),
         ("#431407", "#fdba74", "#fb923c", "📤", "Export",            "CSV · Excel · Report · Recipe",  "4_Export"),
-        ("#0f2027", "#6ee7b7", "#34d399", "📋", "My Dashboard",       "Build your own chart dashboard",  "6_Dashboard"),
     ]
 else:
     cards = [
@@ -209,7 +207,6 @@ else:
         ("#f0fdf4", "#166534", "#16a34a", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale",   "2_Cleaning"),
         ("#fdf4ff", "#6b21a8", "#9333ea", "📊", "Visualize",         "8 chart types · 3D · Download",  "3_Visualization"),
         ("#fff7ed", "#9a3412", "#ea580c", "📤", "Export",            "CSV · Excel · Report · Recipe",  "4_Export"),
-        ("#f0fdf9", "#065f46", "#10b981", "📋", "My Dashboard",       "Build your own chart dashboard",  "6_Dashboard"),
     ]
 
 cols = st.columns(5)
@@ -228,6 +225,6 @@ for col, (bg, title_c, sub_c, icon, title, sub, page) in zip(cols, cards):
         st.page_link(f"pages/{page}.py", label=f"Open {title}", use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
-st.info("👈 Use the sidebar to navigate, or click any section card above. Start with **Upload & Profile**, then clean, visualize, and build your own **Dashboard**.")
+st.info("👈 Use the sidebar to navigate, or click any section card above. Start with **Upload & Profile**, then clean, and visualize.")
 st.markdown("---")
 st.caption("DataWrangler Pro · Coursework Project — Data Wrangling & Visualization · IDs: 00017592 & 00018555")
