@@ -139,7 +139,7 @@ with st.expander("🔍 1. Missing Values", expanded=True):
                     st.dataframe(last_mv["before"], use_container_width=True)
                 with mc2:
                     st.write("**After:**")
-                    st.dataframe(_mv_stats(df, fix_cols), use_container_width=True)
+                    st.dataframe(last_mv["after"], use_container_width=True)
             else:
                 st.write("**Before:**")
                 st.dataframe(before_mv, use_container_width=True)
@@ -166,9 +166,10 @@ with st.expander("🔍 1. Missing Values", expanded=True):
                         elif method == "Backward Fill": df[col] = df[col].bfill()
                         after_miss = int(df[col].isnull().sum())
                         changed.append(f"`{col}` ({before_miss - after_miss} filled)")
+                    after_mv = _mv_stats(df, fix_cols)  # capture AFTER transformation
                     show_tx_preview(f"Fix missing: {', '.join(fix_cols)}", st.session_state.history[-1], df, fix_cols)
                     st.session_state.df = df
-                    st.session_state["_last_mv"] = {"cols": fix_cols, "method": method, "before": before_mv}
+                    st.session_state["_last_mv"] = {"cols": fix_cols, "method": method, "before": before_mv, "after": after_mv}
                     st.session_state.log.append(f"Missing values in {fix_cols} handled with {method}")
                     st.success(f"✅ Applied **{method}** to {len(changed)} column(s): {', '.join(changed)}.")
                     st.rerun()
