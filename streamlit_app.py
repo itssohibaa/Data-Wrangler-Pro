@@ -8,6 +8,23 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Rename "streamlit app" → "Start" in the sidebar navigation
+st.markdown("""
+<style>
+/* Rename the main page label "streamlit app" to "Start" in the sidebar */
+[data-testid="stSidebarNav"] ul li:first-child a span:last-child {
+    visibility: hidden;
+    position: relative;
+}
+[data-testid="stSidebarNav"] ul li:first-child a span:last-child::after {
+    content: "Start";
+    visibility: visible;
+    position: absolute;
+    left: 0;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ── SESSION INIT ──────────────────────────────────────────────────────────────
 if "intro_done" not in st.session_state:
     st.session_state.intro_done = False
