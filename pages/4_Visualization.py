@@ -317,7 +317,10 @@ elif chart_type == "Bar Chart":
                 rng = f2.slider("Range", mn, mx, (mn, mx), key="b_frng")
                 df = df[df[fn].between(rng[0], rng[1])]
 
-    gd   = df.groupby(cat)[num].agg(agg).reset_index().nlargest(topn, num)
+    group_keys = [cat, ca] if ca and ca != cat else [cat]
+    gd = df.groupby(group_keys)[num].agg(agg).reset_index()
+    cat_totals = gd.groupby(cat)[num].sum().nlargest(topn).index
+    gd = gd[gd[cat].isin(cat_totals)]
     fig  = px.bar(gd, x=cat, y=num, color=ca if ca else cat,
                   color_discrete_sequence=THEME_COLORS,
                   labels={cat: cat.replace("_"," "),
