@@ -120,11 +120,16 @@ with st.expander("🔍 1. Missing Values", expanded=True):
 
             const_val = st.text_input("Constant value", key="mv_const") if method == "Constant value" else ""
 
-            # Before table (always shown while cols selected)
-            before_mv = pd.DataFrame({
-                "Missing Count": [int(df[c].isnull().sum()) for c in fix_cols],
-                "Missing %":     [(df[c].isnull().sum() / len(df) * 100).round(2) for c in fix_cols],
-            }, index=fix_cols)
+            def _mv_stats(frame, cols):
+                return pd.DataFrame({
+                    "Column":        cols,
+                    "Type":          [str(frame[c].dtype) for c in cols],
+                    "Missing Count": [int(frame[c].isnull().sum()) for c in cols],
+                    "Missing %":     [round(frame[c].isnull().sum() / len(frame) * 100, 2) for c in cols],
+                    "Sample (non-null)": [str(frame[c].dropna().iloc[0]) if not frame[c].dropna().empty else "—" for c in cols],
+                }).set_index("Column")
+
+            before_mv = _mv_stats(df, fix_cols)
 
             last_mv = st.session_state.get("_last_mv", {})
             if last_mv.get("cols") == fix_cols and last_mv.get("method") == method:
@@ -134,11 +139,7 @@ with st.expander("🔍 1. Missing Values", expanded=True):
                     st.dataframe(last_mv["before"], use_container_width=True)
                 with mc2:
                     st.write("**After:**")
-                    after_mv = pd.DataFrame({
-                        "Missing Count": [int(df[c].isnull().sum()) for c in fix_cols],
-                        "Missing %":     [(df[c].isnull().sum() / len(df) * 100).round(2) for c in fix_cols],
-                    }, index=fix_cols)
-                    st.dataframe(after_mv, use_container_width=True)
+                    st.dataframe(_mv_stats(df, fix_cols), use_container_width=True)
             else:
                 st.write("**Before:**")
                 st.dataframe(before_mv, use_container_width=True)
@@ -218,11 +219,13 @@ with st.expander("🔁 2. Duplicate Detection & Treatment", expanded=False):
     # Before/after snapshot for duplicates
     last_dup = st.session_state.get("_last_dup", {})
     if last_dup:
-        dc1, dc2 = st.columns(2)
-        dc1.metric("Rows before", f"{last_dup['rows_before']:,}")
-        dc2.metric("Rows after",  f"{last_dup['rows_after']:,}",
-                   delta=f"{last_dup['rows_after'] - last_dup['rows_before']:+,}",
-                   delta_color="inverse")
+        st.markdown("**Result of last deduplication:**")
+        dc1, dc2, dc3, dc4 = st.columns(4)
+        removed = last_dup["rows_before"] - last_dup["rows_after"]
+        dc1.metric("Rows before",    f"{last_dup['rows_before']:,}")
+        dc2.metric("Rows after",     f"{last_dup['rows_after']:,}")
+        dc3.metric("Rows removed",   f"{removed:,}", delta=f"-{removed:,}", delta_color="inverse")
+        dc4.metric("Key columns",    ", ".join(last_dup["subset"]) if last_dup["subset"] else "All columns")
 
     if st.button("✅ Apply", key="dup_apply"):
         st.session_state.history.append(df.copy())
@@ -237,7 +240,7 @@ with st.expander("🔁 2. Duplicate Detection & Treatment", expanded=False):
                 df = df.drop_duplicates(subset=check_subset, keep=keep)
                 show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
                 st.session_state.df = df
-                st.session_state["_last_dup"] = {"rows_before": before, "rows_after": len(df)}
+                st.session_state["_last_dup"] = {"rows_before": before, "rows_after": len(df), "subset": check_subset}
                 st.session_state.log.append(f"Removed duplicates ({keep}) — subset: {check_subset or 'all'}")
                 st.success(f"✅ Removed {before - len(df)} duplicate rows. Dataset now has {len(df):,} rows.")
                 st.rerun()
