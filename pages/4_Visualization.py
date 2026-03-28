@@ -54,6 +54,7 @@ LAYOUT_BASE = dict(
 )
 
 CHART_HEIGHT = 420
+DASH_HEIGHT  = 300
 
 def style_fig(fig, title="", xlab="", ylab=""):
     fig.update_layout(
@@ -119,6 +120,7 @@ with r1c1:
                                color_discrete_sequence=[THEME_COLORS[0]],
                                labels={g1c: g1c, "count": "Frequency"})
             fig = style_fig(fig, f"Distribution of {g1c}", g1c, "Frequency")
+            fig.update_layout(height=DASH_HEIGHT)
             st.plotly_chart(fig, use_container_width=True, key="g1")
             chart_download(fig, "g1")
 
@@ -137,7 +139,7 @@ with r1c2:
                                    g2num: g2num.replace("_"," ")})
             fig = style_fig(fig, f"{g2agg.capitalize()} of {g2num} by {g2cat} (Top {g2n})",
                             g2cat.replace("_"," "), f"{g2agg.capitalize()} of {g2num}")
-            fig.update_layout(showlegend=False)
+            fig.update_layout(showlegend=False, height=DASH_HEIGHT)
             st.plotly_chart(fig, use_container_width=True, key="g2")
             chart_download(fig, "g2")
 
@@ -161,6 +163,7 @@ with r2c1:
                                opacity=0.65,
                                labels={g3x: g3x.replace("_"," "), g3y: g3y.replace("_"," ")})
             fig = style_fig(fig, f"{g3y} vs {g3x}", g3x.replace("_"," "), g3y.replace("_"," "))
+            fig.update_layout(height=DASH_HEIGHT)
             st.plotly_chart(fig, use_container_width=True, key="g3")
             chart_download(fig, "g3")
 
@@ -174,7 +177,7 @@ with r2c2:
             corr = df[hm_cols].corr()
             n    = len(hm_cols)
             # Fixed height that fills the card without overflowing; width comes from use_container_width
-            hm_h = max(CHART_HEIGHT, n * 42 + 60)
+            hm_h = max(DASH_HEIGHT, n * 36 + 40)
             fig  = px.imshow(corr, color_continuous_scale="RdBu_r", text_auto=".2f",
                              aspect="auto",          # auto so it fills width, not squares only
                              labels=dict(color="r"))
@@ -212,7 +215,7 @@ with r3c1:
             xtitle = g5x.replace("_"," ") if xa else ""
             fig = style_fig(fig, f"Box Plot of {g5y}" + (f" by {g5x}" if xa else ""),
                             xtitle, g5y.replace("_"," "))
-            fig.update_layout(showlegend=False)
+            fig.update_layout(showlegend=False, height=DASH_HEIGHT)
             st.plotly_chart(fig, use_container_width=True, key="g5")
             chart_download(fig, "g5")
 
@@ -233,6 +236,7 @@ with r3c2:
                               labels={g6x: g6x.replace("_"," "), g6y: g6y.replace("_"," ")})
                 fig = style_fig(fig, f"{g6y} over {g6x}", g6x.replace("_"," "), g6y.replace("_"," "))
                 fig.update_xaxes(tickangle=-40, tickfont=dict(size=11))
+                fig.update_layout(height=DASH_HEIGHT)
                 st.plotly_chart(fig, use_container_width=True, key="g6")
                 chart_download(fig, "g6")
             except Exception as e:
