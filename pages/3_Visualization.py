@@ -175,18 +175,11 @@ with r2c2:
             corr,
             color_continuous_scale="RdBu_r",
             text_auto=".2f",
-            labels=dict(color="r")
             )
             fig.update_layout(
-                **LAYOUT_BASE,
-                title=dict(text="Correlation Matrix", x=0.02, xanchor="left"),
-                xaxis_title="", yaxis_title="",
-                height=hm_h,
-                width=700,
-                coloraxis_colorbar=dict(len=0.4, thickness=10, title="r"),
+                height=700,
+                coloraxis_colorbar=dict(len=0.5, thickness=12, title="r"),
             )
-            fig.update_xaxes(tickangle=-35, tickfont=dict(size=11))
-            fig.update_yaxes(tickfont=dict(size=11))
             st.plotly_chart(fig, use_container_width=True, key="g4")
             chart_download(fig, "g4")
 
