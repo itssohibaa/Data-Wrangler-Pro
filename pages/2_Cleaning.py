@@ -7,6 +7,7 @@ apply_theme()
 
 import pandas as pd
 import numpy as np
+import re
 
 
 for k, v in [("df", None), ("log", []), ("history", [])]:
@@ -23,10 +24,13 @@ df = st.session_state.df.copy()
 # ── UNDO + STATUS BAR ─────────────────────────────────────────────────────────
 c1, c2 = st.columns([1, 4])
 with c1:
-    if st.button("↩️ Undo Last Step"):
+    if st.button("↩️ Undo Last Step", type="secondary"):
         if len(st.session_state.history) > 1:
             st.session_state.history.pop()
             st.session_state.df = st.session_state.history[-1].copy()
+            if st.session_state.log:
+                undone = st.session_state.log.pop()
+            st.success(f"↩️ Undone! Reverted to previous state.")
             st.rerun()
         else:
             st.warning("Nothing to undo.")
@@ -51,38 +55,90 @@ with st.expander("🔍 1. Missing Values", expanded=True):
         st.success("No missing values!")
     else:
         st.dataframe(mv_f, use_container_width=True)
+
+        st.markdown("#### Fix a Single Column")
         col = st.selectbox("Column to fix", mv_f.index.tolist(), key="mv_col")
         ctype = df[col].dtype
         st.info(f"`{col}` — type: `{ctype}` — {int(df[col].isnull().sum())} missing")
 
+        _col_is_numeric = pd.api.types.is_numeric_dtype(df[col])
         opts = ["Drop rows", "Mode (most frequent)", "Constant value", "Forward Fill", "Backward Fill"]
-        if ctype != object:
+        if _col_is_numeric:
             opts = ["Drop rows", "Mean", "Median", "Mode (most frequent)",
                     "Constant value", "Forward Fill", "Backward Fill"]
         method = st.selectbox("Fill method", opts, key="mv_method")
         const_val = st.text_input("Constant value", key="mv_const") if method == "Constant value" else ""
 
-        if st.button("Apply Missing Value Fix", key="mv_apply"):
+        if st.button("✅ Apply Missing Value Fix", key="mv_apply"):
+            before_rows = len(df)
+            before_miss = int(df[col].isnull().sum())
             st.session_state.history.append(df.copy())
-            before = int(df[col].isnull().sum())
             try:
                 if method == "Drop rows":              df = df.dropna(subset=[col])
                 elif method == "Mean":                 df[col] = df[col].fillna(df[col].mean())
                 elif method == "Median":               df[col] = df[col].fillna(df[col].median())
                 elif method == "Mode (most frequent)": df[col] = df[col].fillna(df[col].mode()[0])
                 elif method == "Constant value":
-                    try:    fill = float(const_val) if df[col].dtype != object else const_val
+                    try:    fill = float(const_val) if pd.api.types.is_numeric_dtype(df[col]) else const_val
                     except: fill = const_val
                     df[col] = df[col].fillna(fill)
                 elif method == "Forward Fill":  df[col] = df[col].ffill()
                 elif method == "Backward Fill": df[col] = df[col].bfill()
-                after = int(df[col].isnull().sum())
+                after_miss = int(df[col].isnull().sum())
+                fixed = before_miss - after_miss
+                rows_removed = before_rows - len(df)
                 st.session_state.df = df
                 st.session_state.log.append(f"Missing values in '{col}' handled with {method}")
-                st.success(f"Fixed {before - after} missing values (was {before}, now {after})")
+                if method == "Drop rows":
+                    st.success(f"✅ Dropped {rows_removed} rows with missing `{col}`. Dataset now has {len(df):,} rows.")
+                else:
+                    st.success(f"✅ Filled {fixed} missing values in `{col}` using **{method}**. Remaining missing: {after_miss}.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
+
+        st.markdown("---")
+        st.markdown("#### Drop Columns with High Missing %")
+        thresh_pct = st.slider("Drop columns where missing % exceeds:", 10, 100, 50, key="mv_thresh_drop")
+        high_miss_cols = mv_f[mv_f["Missing %"] > thresh_pct].index.tolist()
+        if high_miss_cols:
+            st.warning(f"{len(high_miss_cols)} column(s) exceed {thresh_pct}% missing: `{'`, `'.join(high_miss_cols)}`")
+            if st.button(f"🗑️ Drop {len(high_miss_cols)} Column(s)", key="mv_drop_cols"):
+                before_cols = df.shape[1]
+                st.session_state.history.append(df.copy())
+                df = df.drop(columns=high_miss_cols)
+                st.session_state.df = df
+                st.session_state.log.append(f"Dropped {len(high_miss_cols)} high-missing columns: {high_miss_cols}")
+                st.success(f"✅ Dropped {len(high_miss_cols)} column(s). Dataset now has {df.shape[1]} columns (was {before_cols}).")
+                st.rerun()
+        else:
+            st.info(f"No columns exceed {thresh_pct}% missing.")
+
+        st.markdown("---")
+        st.markdown("#### Bulk Fill — All Missing Columns")
+        bulk_numeric = st.selectbox("Fill numeric columns with:", ["(skip)", "mean", "median", "mode"], key="bulk_num")
+        bulk_categ   = st.selectbox("Fill categorical columns with:", ["(skip)", "most frequent"], key="bulk_cat")
+        if st.button("✅ Apply Bulk Fill", key="mv_bulk"):
+            st.session_state.history.append(df.copy())
+            changed = []
+            for c in mv_f.index.tolist():
+                if pd.api.types.is_numeric_dtype(df[c]) and bulk_numeric != "(skip)":
+                    n_before = int(df[c].isnull().sum())
+                    if bulk_numeric == "mean":   df[c] = df[c].fillna(df[c].mean())
+                    elif bulk_numeric == "median": df[c] = df[c].fillna(df[c].median())
+                    elif bulk_numeric == "mode":   df[c] = df[c].fillna(df[c].mode()[0])
+                    changed.append(f"`{c}` ({n_before} → {int(df[c].isnull().sum())} missing)")
+                elif not pd.api.types.is_numeric_dtype(df[c]) and bulk_categ != "(skip)":
+                    n_before = int(df[c].isnull().sum())
+                    df[c] = df[c].fillna(df[c].mode()[0] if len(df[c].mode()) > 0 else "Unknown")
+                    changed.append(f"`{c}` ({n_before} → {int(df[c].isnull().sum())} missing)")
+            st.session_state.df = df
+            st.session_state.log.append(f"Bulk missing fill — numeric: {bulk_numeric}, categorical: {bulk_categ}")
+            if changed:
+                st.success(f"✅ Filled missing values in {len(changed)} column(s): {', '.join(changed)}")
+            else:
+                st.info("No columns were changed (check fill method selections).")
+            st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. DUPLICATES
@@ -106,7 +162,7 @@ with st.expander("🔁 2. Duplicate Detection & Treatment", expanded=False):
         "Remove duplicates (keep last)"
     ], key="dup_action")
 
-    if st.button("Apply", key="dup_apply"):
+    if st.button("✅ Apply", key="dup_apply"):
         st.session_state.history.append(df.copy())
         try:
             if action == "Show duplicate groups":
@@ -119,15 +175,92 @@ with st.expander("🔁 2. Duplicate Detection & Treatment", expanded=False):
                 df = df.drop_duplicates(subset=check_subset, keep=keep)
                 st.session_state.df = df
                 st.session_state.log.append(f"Removed duplicates ({keep}) — subset: {check_subset or 'all'}")
-                st.success(f"Removed {before - len(df)} rows. Now {len(df):,} rows.")
+                st.success(f"✅ Removed {before - len(df)} duplicate rows. Dataset now has {len(df):,} rows.")
                 st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 3. CATEGORICAL TOOLS
+# 3. DATA TYPES & PARSING
 # ═══════════════════════════════════════════════════════════════════════════════
-with st.expander("🏷️ 3. Categorical Tools", expanded=False):
+with st.expander("🔢 3. Data Types & Parsing", expanded=False):
+    dtype_op = st.selectbox("Operation", [
+        "Convert column type",
+        "Parse datetime (custom format or auto)",
+        "Clean dirty numeric strings"
+    ], key="dtype_op")
+
+    if dtype_op == "Convert column type":
+        type_col = st.selectbox("Column", df.columns.tolist(), key="type_col")
+        tgt_type = st.selectbox("Convert to", ["numeric", "string", "datetime", "category"], key="tgt_type")
+        st.caption(f"Current type: `{df[type_col].dtype}` | Sample: {df[type_col].dropna().iloc[:3].tolist() if not df[type_col].dropna().empty else 'N/A'}")
+        if st.button("✅ Convert Type", key="type_apply"):
+            st.session_state.history.append(df.copy())
+            try:
+                old_dtype = str(df[type_col].dtype)
+                if tgt_type == "numeric":    df[type_col] = pd.to_numeric(df[type_col], errors="coerce")
+                elif tgt_type == "string":   df[type_col] = df[type_col].astype(str)
+                elif tgt_type == "datetime": df[type_col] = pd.to_datetime(df[type_col], errors="coerce")
+                elif tgt_type == "category": df[type_col] = df[type_col].astype("category")
+                st.session_state.df = df
+                st.session_state.log.append(f"Converted '{type_col}' from {old_dtype} to {tgt_type}")
+                st.success(f"✅ Column `{type_col}` converted from `{old_dtype}` → `{tgt_type}` successfully.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    elif dtype_op == "Parse datetime (custom format or auto)":
+        dt_col = st.selectbox("Column to parse as datetime", df.columns.tolist(), key="dt_col")
+        dt_fmt = st.text_input("Format string (leave blank for auto)", placeholder="%Y-%m-%d or %d/%m/%Y", key="dt_fmt")
+        st.caption("Examples: `%Y-%m-%d`, `%d/%m/%Y`, `%m-%d-%Y %H:%M`. Blank = automatic (may be slower).")
+        if st.button("✅ Parse Datetime", key="dt_apply"):
+            st.session_state.history.append(df.copy())
+            try:
+                before_null = int(df[dt_col].isnull().sum())
+                if dt_fmt.strip():
+                    df[dt_col] = pd.to_datetime(df[dt_col], format=dt_fmt.strip(), errors="coerce")
+                else:
+                    df[dt_col] = pd.to_datetime(df[dt_col], errors="coerce")
+                after_null = int(df[dt_col].isnull().sum())
+                coerced = after_null - before_null
+                st.session_state.df = df
+                st.session_state.log.append(f"Parsed '{dt_col}' as datetime (fmt: '{dt_fmt or 'auto'}')")
+                msg = f"✅ `{dt_col}` parsed as datetime."
+                if coerced > 0:
+                    msg += f" **{coerced} value(s)** could not be parsed and were set to NaT."
+                st.success(msg)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    elif dtype_op == "Clean dirty numeric strings":
+        st.caption("Removes commas, currency symbols ($ £ € ¥), % signs, and extra spaces before converting to numeric.")
+        dirty_col = st.selectbox("Column", df.select_dtypes(include="object").columns.tolist() or df.columns.tolist(), key="dirty_col")
+        sample_vals = df[dirty_col].dropna().head(5).tolist()
+        st.caption(f"Sample values: {sample_vals}")
+        if st.button("✅ Clean & Convert to Numeric", key="dirty_apply"):
+            st.session_state.history.append(df.copy())
+            try:
+                cleaned = (
+                    df[dirty_col].astype(str)
+                    .str.replace(r"[$£€¥₹,\s%]", "", regex=True)
+                    .str.replace(r"\((.+)\)", r"-\1", regex=True)  # (123) -> -123 for accounting format
+                )
+                result = pd.to_numeric(cleaned, errors="coerce")
+                n_ok   = result.notna().sum()
+                n_fail = result.isna().sum() - int(df[dirty_col].isnull().sum())
+                df[dirty_col] = result
+                st.session_state.df = df
+                st.session_state.log.append(f"Cleaned dirty numeric strings in '{dirty_col}'")
+                st.success(f"✅ Cleaned `{dirty_col}`: {n_ok} values converted successfully, {max(0, n_fail)} could not be parsed (set to NaN).")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. CATEGORICAL TOOLS
+# ═══════════════════════════════════════════════════════════════════════════════
+with st.expander("🏷️ 4. Categorical Tools", expanded=False):
     cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
     if not cat_cols:
         st.info("No categorical columns found.")
@@ -142,7 +275,7 @@ with st.expander("🏷️ 3. Categorical Tools", expanded=False):
 
         if cat_op == "Standardize casing / trim whitespace":
             casing = st.selectbox("Apply", ["Trim whitespace only", "lowercase", "UPPERCASE", "Title Case"], key="cat_case")
-            if st.button("Apply Standardization", key="cat_std"):
+            if st.button("✅ Apply Standardization", key="cat_std"):
                 st.session_state.history.append(df.copy())
                 df[cat_col] = df[cat_col].astype(str).str.strip()
                 if casing == "lowercase":     df[cat_col] = df[cat_col].str.lower()
@@ -150,48 +283,48 @@ with st.expander("🏷️ 3. Categorical Tools", expanded=False):
                 elif casing == "Title Case":  df[cat_col] = df[cat_col].str.title()
                 st.session_state.df = df
                 st.session_state.log.append(f"Standardized casing of '{cat_col}': {casing}")
-                st.success("Done!"); st.rerun()
+                st.success(f"✅ Applied **{casing}** to `{cat_col}`."); st.rerun()
 
         elif cat_op == "Map / replace values":
             unique_vals = df[cat_col].dropna().unique().tolist()
             st.caption(f"Unique values in `{cat_col}`: {unique_vals[:20]}")
             from_val = st.selectbox("Replace this value", unique_vals, key="map_from")
             to_val   = st.text_input("With this value", key="map_to")
-            if st.button("Apply Mapping", key="cat_map") and to_val:
+            if st.button("✅ Apply Mapping", key="cat_map") and to_val:
                 st.session_state.history.append(df.copy())
                 df[cat_col] = df[cat_col].replace({from_val: to_val})
                 st.session_state.df = df
                 st.session_state.log.append(f"Mapped '{from_val}' → '{to_val}' in '{cat_col}'")
-                st.success("Done!"); st.rerun()
+                st.success(f"✅ Replaced `{from_val}` → `{to_val}` in `{cat_col}`."); st.rerun()
 
         elif cat_op == "Group rare categories into 'Other'":
             freq_thresh = st.slider("Group categories appearing less than N times", 1, 100, 10, key="rare_thresh")
             counts = df[cat_col].value_counts()
             rare = counts[counts < freq_thresh].index.tolist()
             st.info(f"{len(rare)} rare categories will be grouped: {rare[:10]}")
-            if st.button("Apply Rare Grouping", key="cat_rare"):
+            if st.button("✅ Apply Rare Grouping", key="cat_rare"):
                 st.session_state.history.append(df.copy())
                 df[cat_col] = df[cat_col].apply(lambda x: "Other" if x in rare else x)
                 st.session_state.df = df
                 st.session_state.log.append(f"Grouped {len(rare)} rare categories in '{cat_col}' into 'Other'")
-                st.success("Done!"); st.rerun()
+                st.success(f"✅ Grouped {len(rare)} rare categories into 'Other' in `{cat_col}`."); st.rerun()
 
         elif cat_op == "One-hot encoding":
             st.info(f"Will create binary columns for each unique value in `{cat_col}`.")
             drop_orig = st.checkbox("Drop original column after encoding", value=True, key="ohe_drop")
-            if st.button("Apply One-Hot Encoding", key="cat_ohe"):
+            if st.button("✅ Apply One-Hot Encoding", key="cat_ohe"):
                 st.session_state.history.append(df.copy())
                 dummies = pd.get_dummies(df[cat_col], prefix=cat_col, dtype=int)
                 df = pd.concat([df, dummies], axis=1)
                 if drop_orig: df = df.drop(columns=[cat_col])
                 st.session_state.df = df
                 st.session_state.log.append(f"One-hot encoded '{cat_col}' — {len(dummies.columns)} new columns")
-                st.success(f"Created {len(dummies.columns)} new columns!"); st.rerun()
+                st.success(f"✅ Created {len(dummies.columns)} new binary column(s) from `{cat_col}`."); st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 4. OUTLIER DETECTION & TREATMENT
+# 5. OUTLIER DETECTION & TREATMENT
 # ═══════════════════════════════════════════════════════════════════════════════
-with st.expander("📦 4. Outlier Detection & Treatment", expanded=False):
+with st.expander("📦 5. Outlier Detection & Treatment", expanded=False):
     num_cols = df.select_dtypes(include=np.number).columns.tolist()
     if not num_cols:
         st.info("No numeric columns.")
@@ -220,25 +353,26 @@ with st.expander("📦 4. Outlier Detection & Treatment", expanded=False):
             "Cap (winsorize) to boundary values"
         ], key="out_action")
 
-        if st.button("Apply Outlier Action", key="out_apply"):
+        if st.button("✅ Apply Outlier Action", key="out_apply"):
             st.session_state.history.append(df.copy())
             if action == "Remove outlier rows":
+                before = len(df)
                 df = df[~mask]
                 st.session_state.df = df
                 st.session_state.log.append(f"Removed {n_out} outlier rows from '{out_col}'")
-                st.success(f"Removed {n_out} rows."); st.rerun()
+                st.success(f"✅ Removed {n_out} outlier rows from `{out_col}`. Dataset now has {len(df):,} rows."); st.rerun()
             elif action == "Cap (winsorize) to boundary values":
                 df[out_col] = df[out_col].clip(lower=lower, upper=upper)
                 st.session_state.df = df
                 st.session_state.log.append(f"Winsorized '{out_col}' to [{lower:.2f}, {upper:.2f}]")
-                st.success(f"Capped {n_out} values."); st.rerun()
+                st.success(f"✅ Capped {n_out} outlier values in `{out_col}` to range [{lower:.2f}, {upper:.2f}]."); st.rerun()
             else:
                 st.info("No changes made.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 5. SCALING / NORMALIZATION
+# 6. SCALING / NORMALIZATION
 # ═══════════════════════════════════════════════════════════════════════════════
-with st.expander("📐 5. Scaling & Normalization", expanded=False):
+with st.expander("📐 6. Scaling & Normalization", expanded=False):
     num_cols = df.select_dtypes(include=np.number).columns.tolist()
     if not num_cols:
         st.info("No numeric columns.")
@@ -250,7 +384,7 @@ with st.expander("📐 5. Scaling & Normalization", expanded=False):
             st.write("**Before:**")
             st.dataframe(df[scale_cols].describe().T[["mean","std","min","max"]], use_container_width=True)
 
-        if st.button("Apply Scaling", key="scale_apply") and scale_cols:
+        if st.button("✅ Apply Scaling", key="scale_apply") and scale_cols:
             st.session_state.history.append(df.copy())
             for c in scale_cols:
                 if scale_method == "Min-Max (0–1)":
@@ -260,19 +394,18 @@ with st.expander("📐 5. Scaling & Normalization", expanded=False):
                     df[c] = (df[c] - df[c].mean()) / df[c].std()
             st.session_state.df = df
             st.session_state.log.append(f"Scaled {scale_cols} using {scale_method}")
-            st.success("Scaling applied!")
+            st.success(f"✅ Scaled {len(scale_cols)} column(s) using **{scale_method}**.")
             st.write("**After:**")
             st.dataframe(df[scale_cols].describe().T[["mean","std","min","max"]], use_container_width=True)
             st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 6. COLUMN OPERATIONS
+# 7. COLUMN OPERATIONS
 # ═══════════════════════════════════════════════════════════════════════════════
-with st.expander("🔧 6. Column Operations", expanded=False):
+with st.expander("🔧 7. Column Operations", expanded=False):
     col_op = st.selectbox("Operation", [
         "Rename column",
         "Drop column(s)",
-        "Change column type",
         "Create new column (formula)",
         "Bin numeric column into categories"
     ], key="col_op")
@@ -280,43 +413,27 @@ with st.expander("🔧 6. Column Operations", expanded=False):
     if col_op == "Rename column":
         old = st.selectbox("Column to rename", df.columns.tolist(), key="ren_old")
         new = st.text_input("New name", key="ren_new")
-        if st.button("Rename", key="ren_apply") and new:
+        if st.button("✅ Rename", key="ren_apply") and new:
             st.session_state.history.append(df.copy())
             df = df.rename(columns={old: new})
             st.session_state.df = df
             st.session_state.log.append(f"Renamed '{old}' → '{new}'")
-            st.success("Done!"); st.rerun()
+            st.success(f"✅ Renamed `{old}` → `{new}`."); st.rerun()
 
     elif col_op == "Drop column(s)":
         drop_cols = st.multiselect("Columns to drop", df.columns.tolist(), key="drop_cols")
-        if st.button("Drop", key="drop_apply") and drop_cols:
+        if st.button("✅ Drop", key="drop_apply") and drop_cols:
             st.session_state.history.append(df.copy())
             df = df.drop(columns=drop_cols)
             st.session_state.df = df
             st.session_state.log.append(f"Dropped columns: {drop_cols}")
-            st.success("Done!"); st.rerun()
-
-    elif col_op == "Change column type":
-        type_col  = st.selectbox("Column", df.columns.tolist(), key="type_col")
-        tgt_type  = st.selectbox("Convert to", ["numeric", "string", "datetime", "category"], key="tgt_type")
-        if st.button("Convert", key="type_apply"):
-            st.session_state.history.append(df.copy())
-            try:
-                if tgt_type == "numeric":  df[type_col] = pd.to_numeric(df[type_col], errors="coerce")
-                elif tgt_type == "string": df[type_col] = df[type_col].astype(str)
-                elif tgt_type == "datetime": df[type_col] = pd.to_datetime(df[type_col], errors="coerce")
-                elif tgt_type == "category": df[type_col] = df[type_col].astype("category")
-                st.session_state.df = df
-                st.session_state.log.append(f"Converted '{type_col}' to {tgt_type}")
-                st.success("Done!"); st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
+            st.success(f"✅ Dropped {len(drop_cols)} column(s): `{'`, `'.join(drop_cols)}`."); st.rerun()
 
     elif col_op == "Create new column (formula)":
         st.caption("Use column names as variables. Examples: `salary / age`, `log(salary)`, `salary - salary.mean()`")
         new_col_name = st.text_input("New column name", key="new_col_name")
         formula      = st.text_input("Formula (use column names directly)", key="formula")
-        if st.button("Create Column", key="new_col_apply") and new_col_name and formula:
+        if st.button("✅ Create Column", key="new_col_apply") and new_col_name and formula:
             st.session_state.history.append(df.copy())
             try:
                 local_vars = {c: df[c] for c in df.columns}
@@ -326,7 +443,7 @@ with st.expander("🔧 6. Column Operations", expanded=False):
                 df[new_col_name] = eval(formula, {"__builtins__": {}}, local_vars)
                 st.session_state.df = df
                 st.session_state.log.append(f"Created column '{new_col_name}' = {formula}")
-                st.success(f"Column '{new_col_name}' created!"); st.rerun()
+                st.success(f"✅ Column `{new_col_name}` created successfully from formula: `{formula}`."); st.rerun()
             except Exception as e:
                 st.error(f"Formula error: {e}")
 
@@ -342,7 +459,7 @@ with st.expander("🔧 6. Column Operations", expanded=False):
             bin_labels = st.text_input("Custom labels (comma-separated, optional)", key="bin_labels")
             new_bin_col = st.text_input("New column name", value=f"{bin_col}_binned", key="bin_new_col")
 
-            if st.button("Apply Binning", key="bin_apply"):
+            if st.button("✅ Apply Binning", key="bin_apply"):
                 st.session_state.history.append(df.copy())
                 try:
                     labels = [l.strip() for l in bin_labels.split(",")] if bin_labels else None
@@ -355,18 +472,19 @@ with st.expander("🔧 6. Column Operations", expanded=False):
                             df[new_bin_col] = pd.qcut(df[bin_col], q=bin_n, labels=labels, duplicates="drop")
                         st.session_state.df = df
                         st.session_state.log.append(f"Binned '{bin_col}' into '{new_bin_col}' ({bin_strat})")
-                        st.success("Done!"); st.rerun()
+                        st.success(f"✅ Created `{new_bin_col}` with {bin_n} bins from `{bin_col}`."); st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 7. DATA VALIDATION RULES
+# 8. DATA VALIDATION RULES
 # ═══════════════════════════════════════════════════════════════════════════════
-with st.expander("✅ 7. Data Validation Rules", expanded=False):
+with st.expander("✅ 8. Data Validation Rules", expanded=False):
     val_type = st.selectbox("Validation type", [
         "Numeric range check (min / max)",
         "Allowed categories list",
-        "Non-null constraint"
+        "Non-null constraint",
+        "Regex pattern check"
     ], key="val_type")
 
     if val_type == "Numeric range check (min / max)":
@@ -377,15 +495,16 @@ with st.expander("✅ 7. Data Validation Rules", expanded=False):
             val_col  = st.selectbox("Column", num_cols_v, key="val_num_col")
             val_min  = st.number_input("Minimum allowed value", value=float(df[val_col].min()), key="val_min")
             val_max  = st.number_input("Maximum allowed value", value=float(df[val_col].max()), key="val_max")
-            if st.button("Run Validation", key="val_num_run"):
+            if st.button("🔍 Run Validation", key="val_num_run"):
                 violations = df[(df[val_col] < val_min) | (df[val_col] > val_max)]
                 st.metric("Violations found", len(violations))
                 if not violations.empty:
+                    st.warning(f"⚠️ {len(violations)} rows violate the range [{val_min}, {val_max}] for `{val_col}`.")
                     st.dataframe(violations, use_container_width=True)
                     viol_csv = violations.to_csv(index=False).encode()
                     st.download_button("⬇️ Download violations", viol_csv, "violations.csv", mime="text/csv")
                 else:
-                    st.success("All values within range!")
+                    st.success("✅ All values are within the specified range!")
 
     elif val_type == "Allowed categories list":
         cat_cols_v = df.select_dtypes(include=["object","category"]).columns.tolist()
@@ -395,25 +514,55 @@ with st.expander("✅ 7. Data Validation Rules", expanded=False):
             val_col   = st.selectbox("Column", cat_cols_v, key="val_cat_col")
             unique_v  = df[val_col].dropna().unique().tolist()
             allowed   = st.multiselect("Allowed values", unique_v, default=unique_v, key="val_allowed")
-            if st.button("Run Validation", key="val_cat_run"):
+            if st.button("🔍 Run Validation", key="val_cat_run"):
                 violations = df[~df[val_col].isin(allowed) & df[val_col].notna()]
                 st.metric("Violations found", len(violations))
                 if not violations.empty:
+                    st.warning(f"⚠️ {len(violations)} rows have values not in the allowed list.")
                     st.dataframe(violations, use_container_width=True)
+                    viol_csv = violations.to_csv(index=False).encode()
+                    st.download_button("⬇️ Download violations", viol_csv, "violations.csv", mime="text/csv")
                 else:
-                    st.success("All values are in the allowed list!")
+                    st.success("✅ All values are in the allowed list!")
 
     elif val_type == "Non-null constraint":
         nn_cols = st.multiselect("Columns that must not be null", df.columns.tolist(), key="val_nn_cols")
-        if st.button("Run Validation", key="val_nn_run") and nn_cols:
+        if st.button("🔍 Run Validation", key="val_nn_run") and nn_cols:
             results = {c: int(df[c].isnull().sum()) for c in nn_cols}
             total_viol = sum(results.values())
             st.metric("Total null violations", total_viol)
+            viol_rows = df[df[nn_cols].isnull().any(axis=1)]
             for c, n in results.items():
                 if n > 0:
                     st.warning(f"`{c}`: {n} null values")
                 else:
                     st.success(f"`{c}`: OK")
+            if not viol_rows.empty:
+                st.dataframe(viol_rows, use_container_width=True)
+                viol_csv = viol_rows.to_csv(index=False).encode()
+                st.download_button("⬇️ Download violations", viol_csv, "null_violations.csv", mime="text/csv")
+
+    elif val_type == "Regex pattern check":
+        cat_cols_rx = df.select_dtypes(include=["object"]).columns.tolist()
+        if not cat_cols_rx:
+            st.info("No text columns for regex check.")
+        else:
+            rx_col = st.selectbox("Column", cat_cols_rx, key="val_rx_col")
+            rx_pat = st.text_input("Regex pattern (values must match)", placeholder=r"^\d{4}-\d{2}-\d{2}$", key="val_rx_pat")
+            if rx_pat and st.button("🔍 Run Validation", key="val_rx_run"):
+                try:
+                    mask_match = df[rx_col].astype(str).str.match(rx_pat)
+                    violations = df[~mask_match & df[rx_col].notna()]
+                    st.metric("Violations found", len(violations))
+                    if not violations.empty:
+                        st.warning(f"⚠️ {len(violations)} values in `{rx_col}` do not match pattern `{rx_pat}`.")
+                        st.dataframe(violations, use_container_width=True)
+                        viol_csv = violations.to_csv(index=False).encode()
+                        st.download_button("⬇️ Download violations", viol_csv, "regex_violations.csv", mime="text/csv")
+                    else:
+                        st.success(f"✅ All non-null values in `{rx_col}` match the pattern!")
+                except re.error as e:
+                    st.error(f"Invalid regex: {e}")
 
 st.markdown("---")
 st.subheader("✅ Current Dataset")
