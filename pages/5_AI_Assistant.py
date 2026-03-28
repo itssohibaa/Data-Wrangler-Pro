@@ -30,7 +30,7 @@ with col_toggle:
 
 with col_info:
     if ai_enabled:
-        st.success("AI Assistant is **enabled**. Requires an Anthropic API key in `.streamlit/secrets.toml`.")
+        st.success("AI Assistant is **enabled**. Requires a Groq API key in `.streamlit/secrets.toml` as `GROQ_API_KEY`.")
         st.caption("⚠️ **Note:** AI-generated outputs may be imperfect. Always review suggestions before applying them.")
     else:
         st.info("AI Assistant is **disabled**. The app remains fully functional — automatic suggestions are always available below.")
@@ -77,47 +77,75 @@ When suggesting cleaning or visualization, guide the user to the right page.
 
 IMPORTANT: Your outputs may be imperfect. Always remind the user to review suggestions before applying them."""
 
-def call_claude(messages, max_tokens=1000):
-    """Call Claude API; returns (reply_text, error_msg)."""
+# ── GROQ API CALL ─────────────────────────────────────────────────────────────
+GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
+]
+
+def call_groq(messages, model=None, max_tokens=1000):
+    """Call Groq API; returns (reply_text, error_msg)."""
     api_key = ""
     try:
-        api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+        api_key = st.secrets.get("GROQ_API_KEY", "")
     except Exception:
         pass
     if not api_key:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        return None, "API key not configured. Add `ANTHROPIC_API_KEY` to `.streamlit/secrets.toml`."
+        return None, "API key not configured. Add `GROQ_API_KEY` to `.streamlit/secrets.toml`."
+
+    selected_model = model or GROQ_MODELS[0]
+
+    groq_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
+
     try:
         resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Content-Type": "application/json",
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
+                "Authorization": f"Bearer {api_key}",
             },
             json={
-                "model": "claude-sonnet-4-20250514",
+                "model": selected_model,
                 "max_tokens": max_tokens,
-                "system": SYSTEM_PROMPT,
-                "messages": messages
+                "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + groq_messages,
+                "temperature": 0.7,
             },
             timeout=30
         )
         data = resp.json()
-        if "content" in data:
-            reply = "".join(b["text"] for b in data["content"] if b.get("type") == "text")
+        if resp.status_code != 200:
+            err_msg = data.get("error", {}).get("message", f"HTTP {resp.status_code}")
+            return None, f"Groq API error: {err_msg}"
+        if "choices" in data and data["choices"]:
+            reply = data["choices"][0]["message"]["content"]
             return reply, None
-        elif "error" in data:
-            return None, f"API error: {data['error'].get('message', 'Unknown error')}"
-        return None, "Unexpected API response."
+        return None, "Unexpected API response from Groq."
+    except requests.exceptions.Timeout:
+        return None, "Request timed out. Please try again."
+    except requests.exceptions.ConnectionError:
+        return None, "Could not connect to Groq API. Check your internet connection."
     except Exception as e:
-        return None, str(e)
+        return None, f"Unexpected error: {str(e)}"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # AI FEATURES (only shown when enabled)
 # ══════════════════════════════════════════════════════════════════════════════
 if ai_enabled:
+    # Model selector
+    with st.expander("⚙️ Model Settings", expanded=False):
+        selected_model = st.selectbox(
+            "Groq model",
+            GROQ_MODELS,
+            index=0,
+            key="groq_model",
+            help="llama-3.3-70b-versatile is the most capable. llama-3.1-8b-instant is fastest."
+        )
+        st.caption("Get a free API key at [console.groq.com](https://console.groq.com)")
+
     mode = st.radio("What do you need help with?", [
         "💬 Free chat",
         "🧹 Natural language cleaning",
@@ -139,13 +167,14 @@ if ai_enabled:
                     "role": "user",
                     "content": f"The user wants to: {nl_input}\n\nSuggest the exact transformation, reference column names from the dataset profile, and provide a pandas code snippet. Format your response with TRANSFORMATION: and PANDAS_CODE: labels."
                 }]
-                reply, err = call_claude(messages)
+                reply, err = call_groq(messages, model=st.session_state.get("groq_model"))
             if err:
                 st.error(f"AI error: {err}")
+                st.caption("Check that your `GROQ_API_KEY` is set in `.streamlit/secrets.toml`.")
             elif reply:
                 st.markdown("**AI Suggestion:**")
                 st.markdown(reply)
-                st.warning("⚠️ Review the suggestion above carefully. Go to the **Cleaning** page to apply it manually, or use the code in your own environment.")
+                st.warning("⚠️ Review the suggestion above carefully. Go to the **Cleaning** page to apply it manually.")
 
     elif mode == "📊 Chart suggestions":
         sel_cols = st.multiselect("Select columns to get chart suggestions for:", df.columns.tolist(), key="chart_sug_cols")
@@ -156,7 +185,7 @@ if ai_enabled:
                     "role": "user",
                     "content": f"The user wants chart suggestions for these columns: {col_list}. Suggest 3-5 specific charts. For each: chart type, which column on X axis, which column on Y axis (if applicable), what insight it reveals, and how to find it in the Visualization page."
                 }]
-                reply, err = call_claude(messages)
+                reply, err = call_groq(messages, model=st.session_state.get("groq_model"))
             if err:
                 st.error(f"AI error: {err}")
             elif reply:
@@ -170,7 +199,7 @@ if ai_enabled:
                     "role": "user",
                     "content": f"Generate pandas code for: {code_request}. Use actual column names from the dataset profile. Include comments explaining each step. Start the variable name as 'df'."
                 }]
-                reply, err = call_claude(messages, max_tokens=1200)
+                reply, err = call_groq(messages, model=st.session_state.get("groq_model"), max_tokens=1200)
             if err:
                 st.error(f"AI error: {err}")
             elif reply:
@@ -184,7 +213,7 @@ if ai_enabled:
                     "role": "user",
                     "content": "Generate a data dictionary for this dataset. For each column: infer its likely meaning, note its data type, flag potential data quality issues (nulls, unexpected values), and suggest how it might be used in analysis. Format as a table."
                 }]
-                reply, err = call_claude(messages, max_tokens=1500)
+                reply, err = call_groq(messages, model=st.session_state.get("groq_model"), max_tokens=1500)
             if err:
                 st.error(f"AI error: {err}")
             elif reply:
@@ -199,16 +228,8 @@ if ai_enabled:
             }]
             st.rerun()
 
-    elif mode == "🧹 Suggest cleaning steps":
-        if st.button("✨ Generate Cleaning Recommendations", key="clean_recs_btn"):
-            st.session_state.ai_messages = [{
-                "role": "user",
-                "content": "Based on my dataset profile, what are the most important cleaning steps I should take? Be specific about which columns need attention and what method to use."
-            }]
-            st.rerun()
-
     # ── CHAT INTERFACE ────────────────────────────────────────────────────────
-    if mode in ("💬 Free chat", "🔍 Full dataset analysis", "🧹 Suggest cleaning steps"):
+    if mode in ("💬 Free chat", "🔍 Full dataset analysis"):
         for msg in st.session_state.ai_messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
@@ -216,9 +237,13 @@ if ai_enabled:
         if st.session_state.ai_messages and st.session_state.ai_messages[-1]["role"] == "user":
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
-                    reply, err = call_claude(st.session_state.ai_messages)
+                    reply, err = call_groq(
+                        st.session_state.ai_messages,
+                        model=st.session_state.get("groq_model")
+                    )
                 if err:
                     st.error(f"⚠️ {err}")
+                    st.caption("Make sure `GROQ_API_KEY` is set in `.streamlit/secrets.toml`.")
                     # Fallback suggestions
                     st.markdown("**Automatic suggestions based on your dataset profile:**")
                     missing_info = profile.get("missing_values", {})
