@@ -60,6 +60,70 @@ with st.expander("🌐 Load from Google Sheets (Optional)", expanded=False):
         except Exception as e:
             st.error(f"Could not load sheet. Make sure it is publicly accessible. Error: {e}")
 
+# ── SAMPLE DATASETS ───────────────────────────────────────────────────────────
+with st.expander("🗂️ Try a Sample Dataset", expanded=False):
+    st.markdown("Choose one of our ready-to-use datasets — each has 1,000+ rows, mixed types, coordinates, dates, and missing values.")
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        st.markdown("""
+        **🛒 E-Commerce Orders**
+        - 1,500 rows · 16 columns
+        - Order dates (2022–2024)
+        - Countries, categories, payment methods
+        - Customer lat/lon coordinates
+        - Revenue, discounts, review scores
+        - Some missing values in rating & shipping
+        """)
+        if st.button("Load E-Commerce Orders", use_container_width=True, key="sample_ecom"):
+            import os
+            sample_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data", "ecommerce_orders.csv")
+            df = pd.read_csv(sample_path)
+            st.session_state.df = df
+            st.session_state.history = [df.copy()]
+            st.session_state.last_file = "ecommerce_orders.csv"
+            st.session_state.log = ["Sample dataset loaded: E-Commerce Orders"]
+            st.rerun()
+    with s2:
+        st.markdown("""
+        **🌫️ Air Quality Monitoring**
+        - 2,000 rows · 15 columns
+        - Timestamps every 6 hours (2020)
+        - 10 global cities with coordinates
+        - PM2.5, PM10, NO₂, O₃, AQI readings
+        - Temperature, humidity, wind speed
+        - Missing sensor readings (realistic)
+        """)
+        if st.button("Load Air Quality Data", use_container_width=True, key="sample_air"):
+            import os
+            sample_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data", "air_quality_monitoring.csv")
+            df = pd.read_csv(sample_path)
+            st.session_state.df = df
+            st.session_state.history = [df.copy()]
+            st.session_state.last_file = "air_quality_monitoring.csv"
+            st.session_state.log = ["Sample dataset loaded: Air Quality Monitoring"]
+            st.rerun()
+    with s3:
+        st.markdown("""
+        **✈️ Global Flights**
+        - 1,800 rows · 18 columns
+        - Departure dates (2023–2024)
+        - 8 airlines, 10 major airports
+        - Origin & destination lat/lon
+        - Prices, delays, passenger counts
+        - Missing prices and delay data
+        """)
+        if st.button("Load Global Flights", use_container_width=True, key="sample_flights"):
+            import os
+            sample_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data", "global_flights.csv")
+            df = pd.read_csv(sample_path)
+            st.session_state.df = df
+            st.session_state.history = [df.copy()]
+            st.session_state.last_file = "global_flights.csv"
+            st.session_state.log = ["Sample dataset loaded: Global Flights"]
+            st.rerun()
+
+st.markdown("---")
+
 # ── FILE UPLOAD ───────────────────────────────────────────────────────────────
 file = st.file_uploader("📁 Upload your dataset", type=["csv", "xlsx", "json"],
                          help="CSV, Excel (.xlsx), or JSON")
@@ -181,3 +245,4 @@ st.markdown("---")
 st.write("### Data Preview")
 n_rows = st.slider("Rows to preview", 5, 50, 10)
 st.dataframe(df.head(n_rows), use_container_width=True)
+
