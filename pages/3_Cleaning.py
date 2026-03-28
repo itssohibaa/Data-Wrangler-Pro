@@ -100,47 +100,59 @@ with st.expander("🔍 1. Missing Values", expanded=True):
     else:
         st.dataframe(mv_f, use_container_width=True)
 
-        st.markdown("#### Fix a Single Column")
-        col = st.selectbox("Column to fix", mv_f.index.tolist(), key="mv_col")
-        ctype = df[col].dtype
-        st.info(f"`{col}` — type: `{ctype}` — {int(df[col].isnull().sum())} missing")
+        st.markdown("#### Fix Missing Values")
+        fix_cols = st.multiselect(
+            "Columns to fix (select one or more)",
+            mv_f.index.tolist(),
+            key="mv_cols"
+        )
 
-        _col_is_numeric = pd.api.types.is_numeric_dtype(df[col])
-        opts = ["Drop rows", "Mode (most frequent)", "Constant value", "Forward Fill", "Backward Fill"]
-        if _col_is_numeric:
-            opts = ["Drop rows", "Mean", "Median", "Mode (most frequent)",
-                    "Constant value", "Forward Fill", "Backward Fill"]
-        method = st.selectbox("Fill method", opts, key="mv_method")
-        const_val = st.text_input("Constant value", key="mv_const") if method == "Constant value" else ""
+        if fix_cols:
+            any_numeric = any(pd.api.types.is_numeric_dtype(df[c]) for c in fix_cols)
+            col_info = ", ".join(f"`{c}` ({int(df[c].isnull().sum())} missing)" for c in fix_cols)
+            st.info(f"Selected: {col_info}")
 
-        if st.button("✅ Apply Missing Value Fix", key="mv_apply"):
-            before_rows = len(df)
-            before_miss = int(df[col].isnull().sum())
-            st.session_state.history.append(df.copy())
-            try:
-                if method == "Drop rows":              df = df.dropna(subset=[col])
-                elif method == "Mean":                 df[col] = df[col].fillna(df[col].mean())
-                elif method == "Median":               df[col] = df[col].fillna(df[col].median())
-                elif method == "Mode (most frequent)": df[col] = df[col].fillna(df[col].mode()[0])
-                elif method == "Constant value":
-                    try:    fill = float(const_val) if pd.api.types.is_numeric_dtype(df[col]) else const_val
-                    except: fill = const_val
-                    df[col] = df[col].fillna(fill)
-                elif method == "Forward Fill":  df[col] = df[col].ffill()
-                elif method == "Backward Fill": df[col] = df[col].bfill()
-                after_miss = int(df[col].isnull().sum())
-                fixed = before_miss - after_miss
-                rows_removed = before_rows - len(df)
-                show_tx_preview(f"Fix missing: {col}", st.session_state.history[-1], df, [col])
-                st.session_state.df = df
-                st.session_state.log.append(f"Missing values in '{col}' handled with {method}")
-                if method == "Drop rows":
-                    st.success(f"✅ Dropped {rows_removed} rows with missing `{col}`. Dataset now has {len(df):,} rows.")
-                else:
-                    st.success(f"✅ Filled {fixed} missing values in `{col}` using **{method}**. Remaining missing: {after_miss}.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
+            opts = ["Mode (most frequent)", "Constant value", "Forward Fill", "Backward Fill"]
+            if any_numeric:
+                opts = ["Mean", "Median", "Mode (most frequent)", "Constant value", "Forward Fill", "Backward Fill"]
+            method = st.selectbox("Fill method", opts, key="mv_method")
+
+            if method in ("Mean", "Median"):
+                non_num = [c for c in fix_cols if not pd.api.types.is_numeric_dtype(df[c])]
+                if non_num:
+                    st.warning(f"⚠️ `{'`, `'.join(non_num)}` are not numeric — they will be skipped for **{method}**.")
+
+            const_val = st.text_input("Constant value", key="mv_const") if method == "Constant value" else ""
+
+            if st.button("✅ Apply Missing Value Fix", key="mv_apply"):
+                st.session_state.history.append(df.copy())
+                try:
+                    changed = []
+                    for col in fix_cols:
+                        is_num = pd.api.types.is_numeric_dtype(df[col])
+                        before_miss = int(df[col].isnull().sum())
+                        if method == "Mean":
+                            if is_num: df[col] = df[col].fillna(df[col].mean())
+                            else: continue
+                        elif method == "Median":
+                            if is_num: df[col] = df[col].fillna(df[col].median())
+                            else: continue
+                        elif method == "Mode (most frequent)": df[col] = df[col].fillna(df[col].mode()[0])
+                        elif method == "Constant value":
+                            try:    fill = float(const_val) if is_num else const_val
+                            except: fill = const_val
+                            df[col] = df[col].fillna(fill)
+                        elif method == "Forward Fill":  df[col] = df[col].ffill()
+                        elif method == "Backward Fill": df[col] = df[col].bfill()
+                        after_miss = int(df[col].isnull().sum())
+                        changed.append(f"`{col}` ({before_miss - after_miss} filled)")
+                    show_tx_preview(f"Fix missing: {', '.join(fix_cols)}", st.session_state.history[-1], df, fix_cols)
+                    st.session_state.df = df
+                    st.session_state.log.append(f"Missing values in {fix_cols} handled with {method}")
+                    st.success(f"✅ Applied **{method}** to {len(changed)} column(s): {', '.join(changed)}.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
         st.markdown("---")
         st.markdown("#### Drop Columns with High Missing %")
@@ -160,56 +172,6 @@ with st.expander("🔍 1. Missing Values", expanded=True):
         else:
             st.info(f"No columns exceed {thresh_pct}% missing.")
 
-        st.markdown("---")
-        st.markdown("#### Drop Rows with Missing Values in Chosen Columns")
-        drop_miss_cols = st.multiselect(
-            "Drop rows that have missing values in any of these columns:",
-            df.columns.tolist(),
-            key="mv_drop_rows_cols"
-        )
-        if drop_miss_cols:
-            preview_count = df[drop_miss_cols].isnull().any(axis=1).sum()
-            st.caption(f"This will remove **{preview_count:,}** row(s) that have at least one missing value in the selected columns.")
-            if st.button("🗑️ Drop Rows with Missing Values", key="mv_drop_rows_apply"):
-                if not drop_miss_cols:
-                    st.error("Please select at least one column.")
-                else:
-                    before_rows = len(df)
-                    st.session_state.history.append(df.copy())
-                    df = df.dropna(subset=drop_miss_cols)
-                    show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
-                    st.session_state.df = df
-                    st.session_state.log.append(f"Dropped rows with missing values in columns: {drop_miss_cols}")
-                    removed = before_rows - len(df)
-                    st.success(f"✅ Dropped {removed:,} row(s). Dataset now has {len(df):,} rows.")
-                    st.rerun()
-
-        st.markdown("---")
-        st.markdown("#### Bulk Fill — All Missing Columns")
-        bulk_numeric = st.selectbox("Fill numeric columns with:", ["(skip)", "mean", "median", "mode"], key="bulk_num")
-        bulk_categ   = st.selectbox("Fill categorical columns with:", ["(skip)", "most frequent"], key="bulk_cat")
-        if st.button("✅ Apply Bulk Fill", key="mv_bulk"):
-            st.session_state.history.append(df.copy())
-            changed = []
-            for c in mv_f.index.tolist():
-                if pd.api.types.is_numeric_dtype(df[c]) and bulk_numeric != "(skip)":
-                    n_before = int(df[c].isnull().sum())
-                    if bulk_numeric == "mean":   df[c] = df[c].fillna(df[c].mean())
-                    elif bulk_numeric == "median": df[c] = df[c].fillna(df[c].median())
-                    elif bulk_numeric == "mode":   df[c] = df[c].fillna(df[c].mode()[0])
-                    changed.append(f"`{c}` ({n_before} → {int(df[c].isnull().sum())} missing)")
-                elif not pd.api.types.is_numeric_dtype(df[c]) and bulk_categ != "(skip)":
-                    n_before = int(df[c].isnull().sum())
-                    df[c] = df[c].fillna(df[c].mode()[0] if len(df[c].mode()) > 0 else "Unknown")
-                    changed.append(f"`{c}` ({n_before} → {int(df[c].isnull().sum())} missing)")
-            show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
-            st.session_state.df = df
-            st.session_state.log.append(f"Bulk missing fill — numeric: {bulk_numeric}, categorical: {bulk_categ}")
-            if changed:
-                st.success(f"✅ Filled missing values in {len(changed)} column(s): {', '.join(changed)}")
-            else:
-                st.info("No columns were changed (check fill method selections).")
-            st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. DUPLICATES
