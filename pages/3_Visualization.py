@@ -171,14 +171,19 @@ with r2c2:
             corr = df[numeric_cols].corr()
             n    = len(numeric_cols)
             hm_h = max(CHART_HEIGHT, n * 38 + 80)
-            fig  = px.imshow(corr, color_continuous_scale="RdBu_r", text_auto=".2f",
-                             aspect="equal", labels=dict(color="r"))
+            fig = px.imshow(
+            corr,
+            color_continuous_scale="RdBu_r",
+            text_auto=".2f",
+            labels=dict(color="r")
+            )
             fig.update_layout(
                 **LAYOUT_BASE,
                 title=dict(text="Correlation Matrix", x=0.02, xanchor="left"),
                 xaxis_title="", yaxis_title="",
                 height=hm_h,
-                coloraxis_colorbar=dict(len=0.6, thickness=12, title="r"),
+                width=700,
+                coloraxis_colorbar=dict(len=0.4, thickness=10, title="r"),
             )
             fig.update_xaxes(tickangle=-35, tickfont=dict(size=11))
             fig.update_yaxes(tickfont=dict(size=11))
