@@ -101,7 +101,7 @@ h1, h2, h3, h4, h5, p { color: #e2e8f0 !important; }
 
 st.markdown(DARK_CSS if st.session_state.dark_mode else LIGHT_CSS, unsafe_allow_html=True)
 
-# ── SIDEBAR DARK MODE TOGGLE — styled to match nav link size ─────────────────
+# ── SIDEBAR DARK MODE TOGGLE ──────────────────────────────────────────────────
 st.markdown("""
 <style>
 [data-testid="stSidebar"] [data-testid="stButton"] > button {
@@ -193,33 +193,39 @@ st.markdown(f"""
 
 st.markdown("---")
 
+# ── SECTION CARDS (clickable) ─────────────────────────────────────────────────
 if st.session_state.dark_mode:
     cards = [
-        ("#1e3a5f", "#93c5fd", "#60a5fa", "📂", "Upload & Profile",  "CSV · Excel · JSON · Sheets"),
-        ("#14532d", "#86efac", "#4ade80", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale"),
-        ("#3b0764", "#d8b4fe", "#c084fc", "📊", "Visualize",         "8 chart types · 3D · Download"),
-        ("#431407", "#fdba74", "#fb923c", "📤", "Export",            "CSV · Excel · Report · Recipe"),
+        ("#1e3a5f", "#93c5fd", "#60a5fa", "📂", "Upload & Profile",  "CSV · Excel · JSON · Sheets",   "1_Upload"),
+        ("#14532d", "#86efac", "#4ade80", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale",   "2_Cleaning"),
+        ("#3b0764", "#d8b4fe", "#c084fc", "📊", "Visualize",         "8 chart types · 3D · Download",  "3_Visualization"),
+        ("#431407", "#fdba74", "#fb923c", "📤", "Export",            "CSV · Excel · Report · Recipe",  "4_Export"),
     ]
 else:
     cards = [
-        ("#eff6ff", "#1e40af", "#3b82f6", "📂", "Upload & Profile",  "CSV · Excel · JSON · Sheets"),
-        ("#f0fdf4", "#166534", "#16a34a", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale"),
-        ("#fdf4ff", "#6b21a8", "#9333ea", "📊", "Visualize",         "8 chart types · 3D · Download"),
-        ("#fff7ed", "#9a3412", "#ea580c", "📤", "Export",            "CSV · Excel · Report · Recipe"),
+        ("#eff6ff", "#1e40af", "#3b82f6", "📂", "Upload & Profile",  "CSV · Excel · JSON · Sheets",   "1_Upload"),
+        ("#f0fdf4", "#166534", "#16a34a", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale",   "2_Cleaning"),
+        ("#fdf4ff", "#6b21a8", "#9333ea", "📊", "Visualize",         "8 chart types · 3D · Download",  "3_Visualization"),
+        ("#fff7ed", "#9a3412", "#ea580c", "📤", "Export",            "CSV · Excel · Report · Recipe",  "4_Export"),
     ]
 
 cols = st.columns(4)
-for col, (bg, title_c, sub_c, icon, title, sub) in zip(cols, cards):
+for col, (bg, title_c, sub_c, icon, title, sub, page) in zip(cols, cards):
     with col:
         st.markdown(f"""
-        <div style="background:{bg};border-radius:12px;padding:1.25rem;
-                    border:0.5px solid {sub_c}55;">
-          <div style="font-size:28px">{icon}</div>
-          <div style="font-weight:600;margin-top:8px;color:{title_c}">{title}</div>
-          <div style="font-size:13px;color:{sub_c};margin-top:4px">{sub}</div>
-        </div>""", unsafe_allow_html=True)
+        <a href="{page}" target="_self" style="text-decoration:none;display:block;">
+          <div style="background:{bg};border-radius:12px;padding:1.25rem;
+                      border:0.5px solid {sub_c}55; cursor:pointer;
+                      transition: transform 0.15s, box-shadow 0.15s;"
+               onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.13)'"
+               onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <div style="font-size:28px">{icon}</div>
+            <div style="font-weight:600;margin-top:8px;color:{title_c}">{title}</div>
+            <div style="font-size:13px;color:{sub_c};margin-top:4px">{sub}</div>
+          </div>
+        </a>""", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
-st.info("👈 Use the sidebar to navigate. Start with **Upload & Profile** to load your dataset.")
+st.info("👈 Use the sidebar to navigate, or click any section card above. Start with **Upload & Profile** to load your dataset.")
 st.markdown("---")
 st.caption("DataWrangler Pro · Coursework Project — Data Wrangling & Visualization · IDs: 00017592 & 00018555")
