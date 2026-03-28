@@ -105,12 +105,9 @@ st.markdown("---")
 # ════════════════════════════════════════════════════════════════════════════════
 st.subheader("📈 Analytical Dashboard")
 
-r1c1 = st.container()
-r1c2 = st.container()
-r2c1 = st.container()
-r2c2 = st.container()
-r3c1 = st.container()
-r3c2 = st.container()
+r1c1, r1c2 = st.columns(2, gap="medium")
+r2c1, r2c2 = st.columns(2, gap="medium")
+r3c1, r3c2 = st.columns(2, gap="medium")
 
 with r1c1:
     with st.container(border=True):
