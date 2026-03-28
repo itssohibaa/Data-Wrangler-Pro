@@ -46,6 +46,11 @@ LIGHT_CSS = """
 [data-testid="stExpander"] { border: 0.5px solid #e2e8f0 !important; border-radius: 10px !important;
     background: rgba(255,255,255,0.6) !important; }
 [data-testid="stExpander"] summary { color: #1e293b !important; }
+/* Fix expander content text in light mode */
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] * { color: #1e293b !important; }
+/* Fix download button text in export section */
+[data-testid="stMain"] [data-testid="stDownloadButton"] button { color: #ffffff !important; }
+[data-testid="stMain"] [data-testid="stDownloadButton"] button * { color: #ffffff !important; }
 .stButton > button { border-radius: 8px; font-weight: 500; transition: all 0.15s; color: #1e293b !important; }
 .stButton > button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .stDownloadButton > button { background: #0f172a !important; color: white !important;
@@ -63,6 +68,13 @@ LIGHT_CSS = """
 [data-testid="stMain"] [data-testid="stTabs"] [data-baseweb="tab"] { color: #1e293b !important; }
 /* Info / warning / success boxes */
 [data-testid="stMain"] [data-testid="stAlert"] { color: #1e293b !important; }
+[data-testid="stMain"] [data-testid="stAlert"] * { color: #1e293b !important; }
+/* Dataframes */
+[data-testid="stMain"] [data-testid="stDataFrame"] * { color: #1e293b !important; }
+/* JSON viewer */
+[data-testid="stMain"] [data-testid="stJson"] * { color: #1e293b !important; }
+/* Fix subheader / write text */
+[data-testid="stMain"] [data-testid="stMarkdownContainer"] * { color: #1e293b !important; }
 </style>
 """
 
@@ -84,14 +96,27 @@ DARK_CSS = """
     z-index: 0;
 }
 [data-testid="stMain"] { background: transparent !important; }
-h1, h2, h3, h4, h5, p { color: #e2e8f0 !important; }
+/* ── Force readable light text throughout dark mode ── */
+[data-testid="stMain"] h1,
+[data-testid="stMain"] h2,
+[data-testid="stMain"] h3,
+[data-testid="stMain"] h4,
+[data-testid="stMain"] h5,
+[data-testid="stMain"] h6,
+[data-testid="stMain"] p,
+[data-testid="stMain"] label,
+[data-testid="stMain"] span,
+[data-testid="stMain"] div { color: #e2e8f0 !important; }
 [data-testid="stMetric"] { background: #1e293b !important; border: 0.5px solid #334155 !important;
     border-radius: 10px; padding: 12px 16px !important; }
 [data-testid="stMetricLabel"] { font-size: 12px !important; color: #94a3b8 !important; }
 [data-testid="stMetricValue"] { font-size: 22px !important; font-weight: 600 !important; color: #f1f5f9 !important; }
 [data-testid="stExpander"] { border: 0.5px solid #334155 !important; border-radius: 10px !important;
     background: #1e293b !important; }
-.stButton > button { border-radius: 8px; font-weight: 500; transition: all 0.15s; }
+/* Always-visible text inside expanders in dark mode */
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] * { color: #e2e8f0 !important; }
+[data-testid="stExpander"] summary { color: #e2e8f0 !important; }
+.stButton > button { border-radius: 8px; font-weight: 500; transition: all 0.15s; color: #e2e8f0 !important; }
 .stButton > button:hover { transform: translateY(-1px); }
 .stDownloadButton > button { background: #3b82f6 !important; color: white !important;
     border: none !important; border-radius: 8px !important; }
@@ -99,9 +124,19 @@ h1, h2, h3, h4, h5, p { color: #e2e8f0 !important; }
 [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
 [data-testid="stSidebarNav"] a { border-radius: 8px; margin: 2px 0; }
 [data-testid="stSidebarNav"] a:hover { background: rgba(255,255,255,0.08) !important; }
-[data-testid="stAlert"] { background: #1e3a5f !important; }
-.stMarkdown, .stCaption { color: #94a3b8 !important; }
+[data-testid="stAlert"] { background: #1e3a5f !important; color: #e2e8f0 !important; }
+[data-testid="stAlert"] * { color: #e2e8f0 !important; }
+[data-testid="stMain"] .stMarkdown,
+[data-testid="stMain"] .stCaption { color: #94a3b8 !important; }
+[data-testid="stMain"] [data-testid="stMarkdownContainer"] * { color: #e2e8f0 !important; }
 [data-testid="stDataFrame"] { background: #1e293b !important; }
+/* Widget labels */
+[data-testid="stMain"] [data-testid="stSelectbox"] label,
+[data-testid="stMain"] [data-testid="stMultiSelect"] label,
+[data-testid="stMain"] [data-testid="stRadio"] label,
+[data-testid="stMain"] [data-testid="stCheckbox"] label,
+[data-testid="stMain"] [data-testid="stSlider"] label { color: #e2e8f0 !important; }
+[data-testid="stMain"] [data-testid="stTabs"] [data-baseweb="tab"] { color: #e2e8f0 !important; }
 </style>
 """
 
