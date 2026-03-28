@@ -159,6 +159,7 @@ if not st.session_state.intro_done:
       <div class="intro-sub">Your AI-powered data preparation workspace</div>
       <div class="intro-steps">
         <span class="intro-step">📂 Upload</span>
+        <span class="intro-step">🤖 AI Assistant</span>
         <span class="intro-step">🧹 Clean</span>
         <span class="intro-step">📊 Visualize</span>
         <span class="intro-step">📤 Export</span>
@@ -196,33 +197,36 @@ st.markdown("---")
 # ── SECTION CARDS (clickable) ─────────────────────────────────────────────────
 if st.session_state.dark_mode:
     cards = [
-        ("#1e3a5f", "#93c5fd", "#60a5fa", "📂", "Upload & Profile",  "CSV · Excel · JSON · Sheets",   "1_Upload"),
-        ("#14532d", "#86efac", "#4ade80", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale",   "2_Cleaning"),
-        ("#3b0764", "#d8b4fe", "#c084fc", "📊", "Visualize",         "8 chart types · 3D · Download",  "3_Visualization"),
-        ("#431407", "#fdba74", "#fb923c", "📤", "Export",            "CSV · Excel · Report · Recipe",  "4_Export"),
+        ("#1e3a5f", "#93c5fd", "#60a5fa", "📂", "Upload & Profile",  "CSV · Excel · JSON · Sheets",    "pages/1_Upload.py"),
+        ("#1a1a2e", "#c4b5fd", "#a78bfa", "🤖", "AI Assistant",      "Ask questions about your data",  "pages/2_AI_Assistant.py"),
+        ("#14532d", "#86efac", "#4ade80", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale",   "pages/3_Cleaning.py"),
+        ("#3b0764", "#d8b4fe", "#c084fc", "📊", "Visualize",         "8 chart types · 3D · Download",  "pages/4_Visualization.py"),
+        ("#431407", "#fdba74", "#fb923c", "📤", "Export",            "CSV · Excel · Report · Recipe",  "pages/5_Export.py"),
     ]
 else:
     cards = [
-        ("#eff6ff", "#1e40af", "#3b82f6", "📂", "Upload & Profile",  "CSV · Excel · JSON · Sheets",   "1_Upload"),
-        ("#f0fdf4", "#166534", "#16a34a", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale",   "2_Cleaning"),
-        ("#fdf4ff", "#6b21a8", "#9333ea", "📊", "Visualize",         "8 chart types · 3D · Download",  "3_Visualization"),
-        ("#fff7ed", "#9a3412", "#ea580c", "📤", "Export",            "CSV · Excel · Report · Recipe",  "4_Export"),
+        ("#eff6ff", "#1e40af", "#3b82f6", "📂", "Upload & Profile",  "CSV · Excel · JSON · Sheets",    "pages/1_Upload.py"),
+        ("#f5f3ff", "#5b21b6", "#7c3aed", "🤖", "AI Assistant",      "Ask questions about your data",  "pages/2_AI_Assistant.py"),
+        ("#f0fdf4", "#166534", "#16a34a", "🧹", "Clean & Prepare",   "Missing · Duplicates · Scale",   "pages/3_Cleaning.py"),
+        ("#fdf4ff", "#6b21a8", "#9333ea", "📊", "Visualize",         "8 chart types · 3D · Download",  "pages/4_Visualization.py"),
+        ("#fff7ed", "#9a3412", "#ea580c", "📤", "Export",            "CSV · Excel · Report · Recipe",  "pages/5_Export.py"),
     ]
 
 cols = st.columns(5)
 for col, (bg, title_c, sub_c, icon, title, sub, page) in zip(cols, cards):
     with col:
         st.markdown(f"""
-          <div style="background:{bg};border-radius:12px;padding:1.25rem 1.25rem 0.5rem;
+          <div style="background:{bg};border-radius:12px;padding:1.25rem 1.25rem 1rem;
                       border:0.5px solid {sub_c}55;
                       transition: transform 0.15s, box-shadow 0.15s;"
                onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.13)'"
                onmouseout="this.style.transform='';this.style.boxShadow=''">
             <div style="font-size:28px">{icon}</div>
             <div style="font-weight:600;margin-top:8px;color:{title_c}">{title}</div>
-            <div style="font-size:13px;color:{sub_c};margin-top:4px;margin-bottom:10px">{sub}</div>
+            <div style="font-size:13px;color:{sub_c};margin-top:4px">{sub}</div>
           </div>""", unsafe_allow_html=True)
-        st.page_link(f"pages/{page}.py", label=f"Open {title}", use_container_width=True)
+        if st.button(f"Open {title}", key=f"card_{page}", use_container_width=True):
+            st.switch_page(page)
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.info("👈 Use the sidebar to navigate, or click any section card above. Start with **Upload & Profile**, then clean and visualize your data!")
