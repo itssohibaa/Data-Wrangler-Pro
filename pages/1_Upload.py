@@ -75,7 +75,7 @@ with st.expander("🗂️ Try a Sample Dataset", expanded=False):
         - Some missing values in rating & shipping
         - Duplicates
         """)
-        if st.button("Load E-Commerce Orders", use_container_width=True, key="sample_ecom"):
+        if st.button("Load", use_container_width=True, key="sample_ecom"):
             import os
             sample_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data", "ecommerce_orders.csv")
             df = pd.read_csv(sample_path)
@@ -95,7 +95,7 @@ with st.expander("🗂️ Try a Sample Dataset", expanded=False):
         - Missing sensor readings
         - Duplicates
         """)
-        if st.button("Load Air Quality Data", use_container_width=True, key="sample_air"):
+        if st.button("Load", use_container_width=True, key="sample_air"):
             import os
             sample_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data", "air_quality_monitoring.csv")
             df = pd.read_csv(sample_path)
@@ -112,10 +112,10 @@ with st.expander("🗂️ Try a Sample Dataset", expanded=False):
         - 8 airlines, 10 major airports
         - Origin & destination lat/lon coordinates
         - Prices, delays, passenger counts
-        - Missing prices and delay data
+        - Missing prices and delay
         - Duplicates
         """)
-        if st.button("Load Global Flights", use_container_width=True, key="sample_flights"):
+        if st.button("Load", use_container_width=True, key="sample_flights"):
             import os
             sample_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data", "global_flights.csv")
             df = pd.read_csv(sample_path)
