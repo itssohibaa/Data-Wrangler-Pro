@@ -423,16 +423,29 @@ with st.expander("📐 6. Scaling & Normalization", expanded=False):
         scale_method = st.selectbox("Method", ["Min-Max (0–1)", "Z-score standardization"], key="scale_method")
 
         if scale_cols:
-            # Validate — only numeric columns
             non_numeric = [c for c in scale_cols if c not in num_cols]
             if non_numeric:
                 st.error(f"❌ The following columns are not numeric and cannot be scaled: `{'`, `'.join(non_numeric)}`")
                 scale_cols = []
             else:
-                st.write("**Before:**")
-                st.dataframe(df[scale_cols].describe().T[["mean","std","min","max"]], use_container_width=True)
+                # Show before stats (always visible while columns are selected)
+                before_stats = df[scale_cols].describe().T[["mean","std","min","max"]]
+                # Show after stats if we just scaled these columns (stored in session)
+                last_scale = st.session_state.get("_last_scale", {})
+                if last_scale.get("cols") == scale_cols and last_scale.get("method") == scale_method:
+                    bc1, bc2 = st.columns(2)
+                    with bc1:
+                        st.write("**Before:**")
+                        st.dataframe(last_scale["before"], use_container_width=True)
+                    with bc2:
+                        st.write("**After:**")
+                        st.dataframe(df[scale_cols].describe().T[["mean","std","min","max"]], use_container_width=True)
+                else:
+                    st.write("**Before:**")
+                    st.dataframe(before_stats, use_container_width=True)
 
         if st.button("✅ Apply Scaling", key="scale_apply") and scale_cols:
+            before_stats = df[scale_cols].describe().T[["mean","std","min","max"]]
             st.session_state.history.append(df.copy())
             for c in scale_cols:
                 if scale_method == "Min-Max (0–1)":
@@ -442,10 +455,9 @@ with st.expander("📐 6. Scaling & Normalization", expanded=False):
                     df[c] = (df[c] - df[c].mean()) / df[c].std()
             show_tx_preview('Transformation', st.session_state.history[-1] if st.session_state.history else df, df)
             st.session_state.df = df
+            st.session_state["_last_scale"] = {"cols": scale_cols, "method": scale_method, "before": before_stats}
             st.session_state.log.append(f"Scaled {scale_cols} using {scale_method}")
             st.success(f"✅ Scaled {len(scale_cols)} column(s) using **{scale_method}**.")
-            st.write("**After:**")
-            st.dataframe(df[scale_cols].describe().T[["mean","std","min","max"]], use_container_width=True)
             st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
