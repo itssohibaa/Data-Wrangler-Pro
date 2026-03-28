@@ -214,6 +214,7 @@ else:
 
 cols = st.columns(5)
 for col, (bg, title_c, sub_c, icon, title, sub, page) in zip(cols, cards):
+    page_url = "/" + page.replace("pages/", "").replace(".py", "").split("_", 1)[-1]
     with col:
         st.markdown(f"""
           <div style="background:{bg};border-radius:12px;padding:1.25rem 1.25rem 1rem;
@@ -222,11 +223,12 @@ for col, (bg, title_c, sub_c, icon, title, sub, page) in zip(cols, cards):
                onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.13)'"
                onmouseout="this.style.transform='';this.style.boxShadow=''">
             <div style="font-size:28px">{icon}</div>
-            <div style="font-weight:600;margin-top:8px;color:{title_c}">{title}</div>
+            <a href="{page_url}" target="_self"
+               style="font-weight:600;margin-top:8px;color:{title_c};text-decoration:none;display:block;"
+               onmouseover="this.style.textDecoration='underline'"
+               onmouseout="this.style.textDecoration='none'">{title}</a>
             <div style="font-size:13px;color:{sub_c};margin-top:4px">{sub}</div>
           </div>""", unsafe_allow_html=True)
-        if st.button(f"Open {title}", key=f"card_{page}", use_container_width=True):
-            st.switch_page(page)
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.info("👈 Use the sidebar to navigate, or click any section card above. Start with **Upload & Profile**, then clean and visualize your data!")
