@@ -97,12 +97,14 @@ missing_pct   = round(total_missing / total_cells * 100, 2) if total_cells > 0 e
 dupes         = int(df.duplicated().sum())
 dupes_pct     = round(dupes / df.shape[0] * 100, 2) if df.shape[0] > 0 else 0
 
-m1, m2, m3, m4, m5 = st.columns(5)
+# Separate metrics: Duplicates count and Duplicates % are now individual cards
+m1, m2, m3, m4, m5, m6 = st.columns(6)
 m1.metric("Rows",          f"{df.shape[0]:,}")
 m2.metric("Columns",       df.shape[1])
-m3.metric("Duplicates",    f"{dupes:,} ({dupes_pct:.2f}%)")
-m4.metric("Missing Cells", f"{total_missing:,}")
-m5.metric("Missing %",     f"{missing_pct:.2f}%")
+m3.metric("Duplicates",    f"{dupes:,}")
+m4.metric("Duplicates %",  f"{dupes_pct:.2f}%")
+m5.metric("Missing Cells", f"{total_missing:,}")
+m6.metric("Missing %",     f"{missing_pct:.2f}%")
 
 st.markdown("---")
 st.write("### Missing Values by Column")
@@ -119,6 +121,22 @@ else:
                  .format({"Missing %": "{:.2f}"}),
                  use_container_width=True)
 
+# ── DUPLICATES OVERVIEW TABLE ─────────────────────────────────────────────────
+st.markdown("---")
+st.write("### Duplicate Rows Overview")
+if dupes == 0:
+    st.success("No duplicate rows found!")
+else:
+    dup_mask = df.duplicated(keep=False)
+    dup_df   = df[dup_mask].copy()
+    # Add a group identifier for side-by-side comparison
+    dup_df.insert(0, "_dup_group", df[dup_mask].apply(tuple, axis=1).rank(method="dense").astype(int))
+    dup_df = dup_df.sort_values("_dup_group").reset_index(drop=False)
+    dup_df = dup_df.rename(columns={"index": "_original_row"})
+    st.info(f"Found **{dupes}** duplicate rows across **{dup_df['_dup_group'].nunique()}** groups. "
+            "Rows in the same group are identical — review below before removing.")
+    st.dataframe(dup_df, use_container_width=True)
+
 st.markdown("---")
 st.write("### Column Info")
 info_df = pd.DataFrame({
@@ -129,54 +147,6 @@ info_df = pd.DataFrame({
     "Sample":   [str(df[c].dropna().iloc[0]) if not df[c].dropna().empty else "N/A" for c in df.columns]
 }).reset_index(drop=True)
 st.dataframe(info_df, use_container_width=True)
-
-# ── DATE RANGE COLUMN SPLITTER ────────────────────────────────────────────────
-import re as _re
-
-def _looks_like_date_range(series):
-    """Return True if >50% of non-null values look like 'date – date' or 'date - date'."""
-    sample = series.dropna().astype(str).head(20)
-    if len(sample) == 0:
-        return False
-    hits = sample.str.contains(r'\d{4}[-/]\d{2}[-/]\d{2}\s*[-–—]\s*\d{4}[-/]\d{2}[-/]\d{2}', regex=True)
-    return hits.mean() > 0.5
-
-date_range_cols = [c for c in df.columns if _looks_like_date_range(df[c])]
-
-if date_range_cols:
-    st.markdown("---")
-    st.write("### 📅 Date Range Column Splitting")
-    st.caption(
-        "The following columns appear to contain date ranges (e.g. `2024-03-12 – 2024-03-18`). "
-        "You can split them into separate *start* and *end* date columns."
-    )
-
-    for col in date_range_cols:
-        with st.expander(f"Split `{col}`", expanded=True):
-            start_name = st.text_input(
-                "Start date column name", value=f"{col}_start", key=f"split_start_{col}"
-            )
-            end_name = st.text_input(
-                "End date column name",   value=f"{col}_end",   key=f"split_end_{col}"
-            )
-            if st.button(f"✂️ Split `{col}`", key=f"split_btn_{col}"):
-                try:
-                    sep_pattern = r'\s*[-–—]\s*'
-                    split_df = df[col].astype(str).str.split(sep_pattern, n=1, expand=True)
-                    df[start_name] = pd.to_datetime(split_df[0].str.strip(), errors="coerce")
-                    df[end_name]   = pd.to_datetime(split_df[1].str.strip(), errors="coerce")
-                    st.session_state.df = df
-                    if "log" in st.session_state:
-                        st.session_state.log.append(
-                            f"Split date range column '{col}' → '{start_name}', '{end_name}'"
-                        )
-                    st.success(
-                        f"✅ Created **`{start_name}`** and **`{end_name}`** "
-                        f"(original `{col}` kept). Refresh the page to see updated column list."
-                    )
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Could not split column: {e}")
 
 st.markdown("---")
 st.write("### Summary Statistics")
